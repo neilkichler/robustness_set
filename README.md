@@ -1,6 +1,13 @@
 # Robustness of Sparse Neural Networks
 Author: Neil Kichler
 
+##### Dependencies
+To run the program, please make sure that the following requirements are met
+(if not - install with ```pip install <package>``` or anaconda etc.):
+
+python 3.7.6, numpy 1.17.2, scipy 1.4.1, numba 0.48.0, scikit-learn 0.24.2,
+matplotlib 3.4.1, pandas 1.2.4, psutil 5.8.0
+
 ######  Sparse Evolutionary Artificial Neural Networks
 * Proof of concept implementations of various sparse artificial neural network models with adaptive sparse connectivity trained with the Sparse Evolutionary Training (SET) procedure.  
 * The [SET implementations](https://github.com/dcmocanu/sparse-evolutionary-artificial-neural-networks)
