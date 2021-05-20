@@ -1,3 +1,4 @@
+import re
 import os
 import pickle
 import inspect
@@ -27,8 +28,11 @@ def plot_sparsity_vs_accuracy(data, save_plot=False, show_plot=False):
 
     info = data['info']
 
-    n_sparseness_level = info['n_sparseness_level']
-    scores = data['scores']
+    sparseness_levels = np.array(info['sparseness_levels'])
+    n_sparseness_level = len(sparseness_levels)
+    n_runs = info['runs']
+    scores = data['scores'][0:n_runs, :, :]
+
     score0 = scores[0]
     model_names = get_model_names(data)
 
@@ -45,18 +49,20 @@ def plot_sparsity_vs_accuracy(data, save_plot=False, show_plot=False):
 
     colors = ["green", "red", "blue"]
 
+    sparseness_levels_percent = sparseness_levels * percent
+
     for i, model in enumerate(model_names):
-        m_means = means[:, i]
-        m_std = std[:, i]
+        m_means = means[100, :, i]
+        m_std = std[100, :, i]
         color = colors[i]
-        plt.fill_between(np.linspace(0.1, 1, len(means[:, -1])) * percent, (m_means - m_std) * percent,
+        plt.fill_between(sparseness_levels_percent, (m_means - m_std) * percent,
                          (m_means + m_std) * percent, alpha=0.1,
                              color=color)
 
-        plt.plot(np.linspace(0.1, 1, 10) * percent, m_means * percent, color=color, label=model)
+        plt.plot(sparseness_levels_percent, m_means * percent, color=color, label=model)
 
     plt.title("Sparsity vs Accuracy")
-    plt.xlabel("features selected [%]")
+    plt.xlabel("Sparsity [%]")
     plt.ylabel("Accuracy [%]")
     plt.legend()
 
@@ -73,29 +79,37 @@ def plot_sparsity_vs_time(data, save_plot=False, show_plot=False):
 
     fig = plt.figure()
 
-    times = data['times']
+    info = data['info']
+    n_runs = info['runs']
+
+    # TODO(Neil): Time is actually in micro not milliseconds. Divide by another 1000!
+
+    times = data['times'][0:n_runs, :, :]
     model_names = get_model_names(data)
     percent = 100
 
     means = np.mean(times, axis=0)
     std = np.std(times, axis=0)
 
+    sparseness_levels = np.array(info['sparseness_levels'])
+    sparseness_levels_percent = sparseness_levels * percent
+
     # maybe add a dict with model to color?
     colors = ["green", "red", "blue"]
 
     for i, model in enumerate(model_names):
-        m_means = means[:, i]
-        m_std = std[:, i]
+        m_means = means[10, :, i]
+        m_std = std[10, :, i]
 
         color = colors[i]
-        plt.fill_between(np.linspace(0.1, 1, 10) * percent, (m_means - m_std) * percent,
+        plt.fill_between(sparseness_levels_percent, (m_means - m_std) * percent,
                          (m_means + m_std) * percent, alpha=0.1,
                          color=color)
 
-        plt.plot(np.linspace(0.1, 1, 10) * percent, m_means * percent, color=color, label=model)
+        plt.plot(sparseness_levels_percent, m_means * percent, color=color, label=model)
 
     plt.title("Sparsity vs Time")
-    plt.xlabel("features selected [%]")
+    plt.xlabel("Sparsity [%]")
     plt.ylabel("Training time [ms]")
     plt.legend()
 
@@ -113,25 +127,30 @@ def plot_feature_selection_per_run(data):
     features = data['selected_features']
 
     # let's look at only one run at a time
-    for i, f in enumerate(features):
-        fig, ax = plt.subplots(3, 3)
-        fig.suptitle(f'Feature Selection FMNIST Run: {i}')
-        for i in range(3):
-            for j in range(3):
-                k = 3 * i + j
-                f_data = np.reshape(f[k], image_dim)
-                current_ax = ax[i, j]
-                current_ax.imshow(f_data, vmin=0, vmax=1, cmap="gray_r", interpolation=None)
-                current_ax.set_title(f"Sparse: {10 + k * 10} %")
-                # current_ax.set_xlabel("12")
+    # for i, f in enumerate(features):
 
-        plt.tight_layout(pad=0.4, w_pad=0.3, h_pad=0.3)
-        plt.show()
+    f = features[100, :, :]
+
+    fig, ax = plt.subplots(3, 3)
+    fig.suptitle(f'Feature Selection FMNIST Run:') # {i}')
+    for i in range(3):
+        for j in range(3):
+            k = 3 * i + j
+            f_data = np.reshape(f[k], image_dim)
+            current_ax = ax[i, j]
+            current_ax.imshow(f_data, vmin=0, vmax=1, cmap="gray_r", interpolation=None)
+            current_ax.set_title(f"Sparse: {10 + k * 10} %")
+            # current_ax.set_xlabel("12")
+
+    plt.tight_layout(pad=0.4, w_pad=0.3, h_pad=0.3)
+    plt.show()
 
 
 def plot_feature_selection_aggregate(data, show_plot=False, show_cbar=False, save_plot=False):
     image_dim = (28, 28)
     features = data['selected_features']
+
+    features = features[100, :, :]
 
     # plot the aggregate
     fig, axs = plt.subplots(nrows=3, ncols=3)
@@ -192,9 +211,14 @@ if __name__ == "__main__":
     with open(fname, "rb") as handle:
         benchmark = pickle.load(handle)
 
+        # This info should have been in the benchmark
+        n_runs = int(re.search(r'\d+', flist[-1]).group())
+        benchmark['info']['runs'] = n_runs
+
         print(benchmark["models"])
 
-        plot_sparsity_vs_accuracy(benchmark, show_plot=True, save_plot=True)
-        plot_sparsity_vs_time(benchmark, save_plot=True)
-        plot_feature_selection_aggregate(benchmark, show_plot=False, save_plot=True)
-        plt.show()
+        # plot_sparsity_vs_accuracy(benchmark, show_plot=True, save_plot=False)
+        # plot_sparsity_vs_time(benchmark, show_plot=True, save_plot=False)
+        # plot_feature_selection_aggregate(benchmark, show_plot=True, save_plot=False)
+        plot_feature_selection_per_run(benchmark)
+        # plt.show()

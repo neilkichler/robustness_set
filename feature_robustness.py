@@ -88,6 +88,7 @@ def single_run(run_id, set_params, models, sample_weights, sparseness_levels, n_
 
     monitor = Monitor()
 
+    # TODO(Neil): only iterate over the actual weights we want to sample
     for i, weights in enumerate(evolved_weights):
         if i not in sample_weights:
             continue
@@ -121,7 +122,7 @@ def single_run(run_id, set_params, models, sample_weights, sparseness_levels, n_
 
                 score = model.score(selected_x_test, current_y_test)
 
-                print("[run_id={:<3}|weights_epoch={:<3}|sparseness={:<6}|model={:<20}] Finished fitting w/ accuracy={:>3}".format(
+                print( "[run_id={:<3}|weights_epoch={:<3}|sparseness={:<6}|model={:<20}] Finished fitting w/ accuracy={:>3}".format(
                         run_id, i, fullness, type(model).__name__, score))
 
                 times[i][j][k] = elapsed_time.microseconds
@@ -139,7 +140,15 @@ def chebychev_grid(lower, upper, n):
             for i in range(n)]
 
 
-def test_fmnist(runs=10, n_training_epochs=100, sample_weights=[10, 50, 100, 200], sparseness_levels=[0.1, 0.5, 0.9], use_logical_cores=True):
+def test_fmnist(runs=10, n_training_epochs=100, sample_weights=None, sparseness_levels=None, use_logical_cores=True):
+
+    # use some default values if none are given
+    if sparseness_levels is None:
+        sparseness_levels = [0.1, 0.5, 0.9]
+
+    if sample_weights is None:
+        sample_weights = [10, 50, 100, 200]
+
     results = {}
     max_finished = 0
 
@@ -195,11 +204,14 @@ def test_fmnist(runs=10, n_training_epochs=100, sample_weights=[10, 50, 100, 200
             print(f'[run={i}] Finished job')
             print(f'Updating results dict')
             print(f'Saving results in new pickle')
-            results = {'info': info, 'set_params': set_params, 'models': models, 'scores': scores, 'times': times,
-                       'stats': stats,
-                       'selected_features': selected_features, 'evolved_weights': all_evolved_weights}
 
             max_finished = max(i, max_finished)
+            info['runs'] = max_finished
+
+            results = {'info': info, 'set_params': set_params, 'models': models, 'scores': scores, 'times': times,
+                       'stats': stats,
+                       'selected_features': selected_features_per_run, 'evolved_weights': all_evolved_weights}
+
             with open(f"{FOLDER}/benchmark_upto_run_{max_finished}_{time.time()}.pickle", "wb") as h:
                 pickle.dump(results, h)
 
