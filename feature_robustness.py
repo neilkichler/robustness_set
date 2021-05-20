@@ -8,8 +8,6 @@ from sklearn.ensemble import ExtraTreesClassifier
 from sklearn.svm import SVC
 from sklearn.neighbors import KNeighborsClassifier
 
-from memory_profiler import profile
-
 from set_mlp import SET_MLP, Relu, Softmax, load_fashion_mnist_data, CrossEntropy
 
 from multiprocessing import Pool
@@ -25,12 +23,11 @@ def index_one(x):
     return np.where(x == 1)
 
 
-@profile
 def wrapper(model, x_train, current_y_train):
     model.fit(x_train, current_y_train)
 
 
-def single_run(run_id, set_params, models, sparseness_levels, n_training_epochs):
+def single_run(run_id, set_params, models, sample_weights, sparseness_levels, n_training_epochs):
     print(f"[run={run_id}] Job started")
 
     n_models = len(models)
@@ -92,7 +89,7 @@ def single_run(run_id, set_params, models, sparseness_levels, n_training_epochs)
     monitor = Monitor()
 
     for i, weights in enumerate(evolved_weights):
-        if i % 10 != 0:
+        if i not in sample_weights:
             continue
 
         for j, fullness in enumerate(sparseness_levels):
@@ -120,10 +117,12 @@ def single_run(run_id, set_params, models, sparseness_levels, n_training_epochs)
                 model.fit(selected_x_train, current_y_train)
 
                 monitor.stop_monitor()
-                print(f"[run={run_id}][w={i}][sparseness={j}][model={k}]Finished fitting")
                 elapsed_time = datetime.datetime.now() - start_time
 
                 score = model.score(selected_x_test, current_y_test)
+
+                print("[run_id={:<3}|weights_epoch={:<3}|sparseness={:<6}|model={:<20}] Finished fitting w/ accuracy={:>3}".format(
+                        run_id, i, fullness, type(model).__name__, score))
 
                 times[i][j][k] = elapsed_time.microseconds
                 scores[i][j][k] = score
@@ -140,7 +139,7 @@ def chebychev_grid(lower, upper, n):
             for i in range(n)]
 
 
-def test_fmnist(runs=10, n_training_epochs=100, n_sparseness_levels=10):
+def test_fmnist(runs=10, n_training_epochs=100, sample_weights=[10, 50, 100, 200], sparseness_levels=[0.1, 0.5, 0.9], use_logical_cores=True):
     results = {}
     max_finished = 0
 
@@ -154,11 +153,12 @@ def test_fmnist(runs=10, n_training_epochs=100, n_sparseness_levels=10):
         print(f'{model}')
 
     # We take sparseness levels on a chebyshev grid to focus on the ends of the range
-    sparseness_levels = chebychev_grid(0, 1, n_sparseness_levels)
+    # sparseness_levels = chebychev_grid(0, 1, n_sparseness_levels)
 
     # equidistant alternative
     # sparseness_levels = np.linspace(0.1, 1, n_sparseness_levels)
 
+    n_sparseness_levels = len(sparseness_levels)
     n_models = len(models)
 
     info = {'runs': runs, 'n_training_epochs': n_training_epochs, 'sparseness_levels': sparseness_levels,
@@ -178,10 +178,11 @@ def test_fmnist(runs=10, n_training_epochs=100, n_sparseness_levels=10):
                   'batch_size': 40, 'dropout_rate': 0, 'learning_rate': 0.05, 'momentum': 0.9, 'weight_decay': 0.0002}
 
     start_test = datetime.datetime.now()
-    n_cores = psutil.cpu_count(logical=False)
+    n_cores = psutil.cpu_count(logical=use_logical_cores)
     with Pool(processes=n_cores) as pool:
 
-        futures = [pool.apply_async(single_run, (i, set_params, models, sparseness_levels, n_training_epochs)) for i in range(runs)]
+        futures = [pool.apply_async(single_run, (i, set_params, models,
+            sample_weights, sparseness_levels, n_training_epochs)) for i in range(runs)]
 
         for i, future in enumerate(futures):
             print(f'[run={i}] Starting job')
@@ -229,15 +230,25 @@ if __name__ == "__main__":
     os.makedirs(FOLDER)
 
     # all have dimensions (runs, models, n_sparseness_levels)
-    runs = 6
-    n_training_epochs = 3
-    n_sparseness_levels = 2
+    runs = 100
+    n_training_epochs = 400
 
-    benchmark = test_fmnist(runs=runs, n_training_epochs=n_training_epochs, n_sparseness_levels=n_sparseness_levels)
+
+    sample_weights = [0, 10, 20, 30, 40, 50, 75, 100, 150, 200, 300, 400]
+    sparseness_levels = [0, 0.025, 0.05, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.85, 0.9, 0.925, 0.95,
+            0.975, 0.99, 0.999, 0.9999, 0.99999]
+
+
+    use_logical_cores = True
+
+    benchmark = test_fmnist(runs=runs, sample_weights=sample_weights, n_training_epochs=n_training_epochs,
+            sparseness_levels=sparseness_levels,
+            use_logical_cores=use_logical_cores)
 
     print("Finished benchmark. Saving final results to disk")
     with open(f"{FOLDER}/benchmark_completed_{time.time()}.pickle", "wb") as handle:
         pickle.dump(benchmark, handle)
+
 
     # with open("benchmark.pickle", "rb") as handle:
     #    b2 = pickle.load(handle)
