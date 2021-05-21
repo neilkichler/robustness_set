@@ -120,27 +120,55 @@ def plot_sparsity_vs_time(data, save_plot=False, show_plot=False):
         plt.show()
 
 
+
+
+def plot_feature_selection_single_instance(data):
+    percent = 100
+    image_dim = (28, 28)
+    features = data['selected_features']
+
+    sparseness_levels = data['info']['sparseness_levels']
+
+    # let's look at only one run at a time
+    # for i, f in enumerate(features):
+
+    f = features[0]  # 00, :, :]
+    f = f[50]
+
+    # fig.suptitle(f'Feature Selection FMNIST Run:')  # {i}')
+    for i, s in enumerate(sparseness_levels):
+        # k = 3 * i + j
+        f_data = np.reshape(f[i], image_dim)
+        # current_ax = a  # x[i, j]
+        plt.imshow(f_data, vmin=0, vmax=1, cmap="gray_r", interpolation=None)
+        # current_ax.set_title(f"Sparse: {sparseness_levels[i]} %")
+        # current_ax.set_xlabel("12")
+        plt.show()
+
+
 def plot_feature_selection_per_run(data):
 
     percent = 100
     image_dim = (28, 28)
     features = data['selected_features']
 
+    sparseness_levels = data['info']['sparseness_levels']
+
     # let's look at only one run at a time
     # for i, f in enumerate(features):
 
-    f = features[100, :, :]
+    f = features[0]  # 00, :, :]
+    f = f[0]
 
     fig, ax = plt.subplots(3, 3)
-    fig.suptitle(f'Feature Selection FMNIST Run:') # {i}')
-    for i in range(3):
-        for j in range(3):
-            k = 3 * i + j
-            f_data = np.reshape(f[k], image_dim)
-            current_ax = ax[i, j]
-            current_ax.imshow(f_data, vmin=0, vmax=1, cmap="gray_r", interpolation=None)
-            current_ax.set_title(f"Sparse: {10 + k * 10} %")
-            # current_ax.set_xlabel("12")
+    fig.suptitle(f'Feature Selection FMNIST Run:')  # {i}')
+    for i, a in enumerate(ax.flat):
+        # k = 3 * i + j
+        f_data = np.reshape(f[i], image_dim)
+        current_ax = a  # x[i, j]
+        current_ax.imshow(f_data, vmin=0, vmax=1, cmap="gray_r", interpolation=None)
+        current_ax.set_title(f"Sparse: {sparseness_levels[i]} %")
+        # current_ax.set_xlabel("12")
 
     plt.tight_layout(pad=0.4, w_pad=0.3, h_pad=0.3)
     plt.show()
@@ -206,19 +234,26 @@ if __name__ == "__main__":
     # always use the most complete/latest benchmark by default
     fname = full_folder_name + '/' + flist[-1]
 
+
+    # Note(Neil): You can also overwrite the fname here
     # fname = "benchmark_1621249372.1620104.pickle"
 
     with open(fname, "rb") as handle:
         benchmark = pickle.load(handle)
 
         # This info should have been in the benchmark
-        n_runs = int(re.search(r'\d+', flist[-1]).group())
-        benchmark['info']['runs'] = n_runs
+        # TODO(Neil): really not needed anymore
+        if not completed_list:
+            n_runs = int(re.search(r'\d+', flist[-1]).group())
+            benchmark['info']['runs'] = n_runs
+        else:
+            benchmark['info']['runs'] += 1
 
         print(benchmark["models"])
 
         # plot_sparsity_vs_accuracy(benchmark, show_plot=True, save_plot=False)
         # plot_sparsity_vs_time(benchmark, show_plot=True, save_plot=False)
         # plot_feature_selection_aggregate(benchmark, show_plot=True, save_plot=False)
-        plot_feature_selection_per_run(benchmark)
+        # plot_feature_selection_per_run(benchmark)
+        plot_feature_selection_single_instance(benchmark)
         # plt.show()

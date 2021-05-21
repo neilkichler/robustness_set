@@ -17,6 +17,16 @@ import psutil
 
 FOLDER = "benchmarks"
 
+import matplotlib.pyplot as plt
+
+def vis_feature_selection(feature_selection, epoch=0, sparsity=0.5, id=0):
+    image_dim = (28, 28)
+    f_data = np.reshape(feature_selection, image_dim)
+
+    plt.imshow(f_data, vmin=0, vmax=1, cmap="gray_r", interpolation=None)
+    plt.title(f"epoch: {epoch}, Sparsity: {sparsity}, id: {id}")
+    plt.show()
+
 
 # return the index of where a one is inside an array
 def index_one(x):
@@ -27,7 +37,7 @@ def wrapper(model, x_train, current_y_train):
     model.fit(x_train, current_y_train)
 
 
-def single_run(run_id, set_params, models, sample_weights, sparseness_levels, n_training_epochs):
+def single_run(run_id, set_params, models, sample_epochs, sparseness_levels, n_training_epochs):
     print(f"[run={run_id}] Job started")
 
     n_models = len(models)
@@ -61,18 +71,19 @@ def single_run(run_id, set_params, models, sample_weights, sparseness_levels, n_
     start_time = time.time()
 
     # train SET-MLP to find important features
-    set_mlp.fit(x_train, y_train, x_test, y_test, loss=CrossEntropy, epochs=n_training_epochs,
+    set_metrics = set_mlp.fit(x_train, y_train, x_test, y_test, loss=CrossEntropy, epochs=n_training_epochs,
                 batch_size=batch_size, learning_rate=learning_rate,
-                momentum=momentum, weight_decay=weight_decay, zeta=zeta, dropoutrate=dropout_rate, testing=False,
-                save_filename="Pretrained_results/set_mlp_" + str(
-                    n_training_samples) + "_training_samples_e" + str(epsilon) + "_rand" + str(run_id), monitor=True)
+                momentum=momentum, weight_decay=weight_decay, zeta=zeta, dropoutrate=dropout_rate, testing=True,
+                save_filename="", monitor=False)
+                # save_filename="Pretrained_results/set_mlp_" + str(
+                #     n_training_samples) + "_training_samples_e" + str(epsilon) + "_rand" + str(run_id), monitor=True)
 
     # After every epoch we store all weight layers to do feature selection and topology comparison
     evolved_weights = set_mlp.weights_evolution
 
     n_evolutions = len(evolved_weights)
     n_sparseness_levels = len(sparseness_levels)
-    selected_features = np.empty((n_evolutions, n_sparseness_levels, n_features))
+    selected_features = np.zeros((n_evolutions, n_sparseness_levels, n_features))
 
     # TODO(Neil): Make a pandas dataframe instead?
     dimensions = (n_evolutions, n_sparseness_levels, n_models)
@@ -88,16 +99,16 @@ def single_run(run_id, set_params, models, sample_weights, sparseness_levels, n_
 
     monitor = Monitor()
 
-    # TODO(Neil): only iterate over the actual weights we want to sample
-    for i, weights in enumerate(evolved_weights):
-        if i not in sample_weights:
-            continue
+    for i, epoch in enumerate(sample_epochs):
+        for j, sparsity in enumerate(sparseness_levels):
+            first_layer = evolved_weights[epoch][1]
+            selected_indices = set_mlp.feature_selection_mean(sparsity, weights=first_layer)  # alternative
+            # selected_indices = set_mlp.feature_selection(fullness, weights=weights[1])
 
-        for j, fullness in enumerate(sparseness_levels):
-            # selected_indices = set_mlp.feature_selection_mean()  # alternative
-            selected_indices = set_mlp.feature_selection(fullness, weights=weights[1])
+            vis_feature_selection(selected_indices, epoch=epoch, sparsity=sparsity, id=run_id)
 
             selected_features[i][j] = selected_indices
+            continue
 
             selected_x_train = x_train[:, selected_indices]
             selected_x_test = x_test[:, selected_indices]
@@ -123,14 +134,14 @@ def single_run(run_id, set_params, models, sample_weights, sparseness_levels, n_
                 score = model.score(selected_x_test, current_y_test)
 
                 print( "[run_id={:<3}|weights_epoch={:<3}|sparseness={:<6}|model={:<20}] Finished fitting w/ accuracy={:>3}".format(
-                        run_id, i, fullness, type(model).__name__, score))
+                        run_id, i, sparsity, type(model).__name__, score))
 
                 times[i][j][k] = elapsed_time.microseconds
                 scores[i][j][k] = score
                 if i == len(evolved_weights) - 1:
                     stats[j][k] = monitor.get_stats()
 
-    return scores, times, stats, selected_features, evolved_weights
+    return scores, times, stats, selected_features, evolved_weights, set_metrics
 
 
 def chebychev_grid(lower, upper, n):
@@ -140,14 +151,48 @@ def chebychev_grid(lower, upper, n):
             for i in range(n)]
 
 
-def test_fmnist(runs=10, n_training_epochs=100, sample_weights=None, sparseness_levels=None, use_logical_cores=True):
+
+def feature_selection_mean(weights, threshold=0.4):
+
+    means = np.asarray(np.mean(np.abs(weights), axis=1)).flatten()
+    means_sorted = np.sort(means)
+    threshold_idx = int(means.size * threshold)
+
+    n = len(means)
+    if threshold_idx == n:
+        return np.ones(n, dtype=bool)
+
+    means_threshold = means_sorted[threshold_idx]
+
+    feature_selection = means >= means_threshold
+
+    return feature_selection
+
+
+def test_fmnist_pretrained_set(evolved_weights, runs=10, n_training_epochs=100, sample_epochs=None, sparseness_levels=None, use_logical_cores=True):
+
+    results = {}
+    max_finished = 0
+
+    sparseness = 0.7
+
+    # evolved_weights = evolved_weights[sample_epochs]
+
+    for epochs in evolved_weights:
+        for i, epoch in enumerate(epochs):
+            if (i % 50 == 0):
+                feature_selection = feature_selection_mean(epoch[1], sparseness)
+                vis_feature_selection(feature_selection, epoch=i, sparsity=sparseness)
+
+
+def test_fmnist(runs=10, n_training_epochs=100, sample_epochs=None, sparseness_levels=None, use_logical_cores=True):
 
     # use some default values if none are given
     if sparseness_levels is None:
         sparseness_levels = [0.1, 0.5, 0.9]
 
-    if sample_weights is None:
-        sample_weights = [10, 50, 100, 200]
+    if sample_epochs is None:
+        sample_epochs = [10, 50, 100, 200]
 
     results = {}
     max_finished = 0
@@ -161,12 +206,6 @@ def test_fmnist(runs=10, n_training_epochs=100, sample_weights=None, sparseness_
     for model in models:
         print(f'{model}')
 
-    # We take sparseness levels on a chebyshev grid to focus on the ends of the range
-    # sparseness_levels = chebychev_grid(0, 1, n_sparseness_levels)
-
-    # equidistant alternative
-    # sparseness_levels = np.linspace(0.1, 1, n_sparseness_levels)
-
     n_sparseness_levels = len(sparseness_levels)
     n_models = len(models)
 
@@ -179,6 +218,7 @@ def test_fmnist(runs=10, n_training_epochs=100, sample_weights=None, sparseness_
     stats_ = []  # np.empty((runs, len(models), n_sparseness_levels))
     selected_features_per_run = []
     all_evolved_weights = []
+    set_metrics_per_run = np.empty((runs, n_training_epochs, 4))
 
     # SET model parameters
     set_params = {'n_hidden_neurons_layer': 3000,
@@ -191,13 +231,14 @@ def test_fmnist(runs=10, n_training_epochs=100, sample_weights=None, sparseness_
     with Pool(processes=n_cores) as pool:
 
         futures = [pool.apply_async(single_run, (i, set_params, models,
-            sample_weights, sparseness_levels, n_training_epochs)) for i in range(runs)]
+            sample_epochs, sparseness_levels, n_training_epochs)) for i in range(runs)]
 
         for i, future in enumerate(futures):
             print(f'[run={i}] Starting job')
-            s, t, stats, selected_features, evolved_weights = future.get()
+            s, t, stats, selected_features, evolved_weights, set_metrics = future.get()
             scores[i] = s
             times[i] = t
+            set_metrics_per_run[i] = set_metrics
             stats_.append(stats)
             selected_features_per_run.append(selected_features)
             all_evolved_weights.append(evolved_weights)
@@ -241,21 +282,43 @@ if __name__ == "__main__":
     FOLDER = f"{FOLDER}/{sub_folder}_{datetime.datetime.now().strftime(date_format)}"
     os.makedirs(FOLDER)
 
-    # all have dimensions (runs, models, n_sparseness_levels)
-    runs = 100
-    n_training_epochs = 400
 
+    evolved_weigths = None
+    # fname = "E:/research/robustness_set/benchmarks/benchmark_18_05_2021_21_57_42/benchmark_upto_run_43_1621438657.8744707.pickle"
 
-    sample_weights = [0, 10, 20, 30, 40, 50, 75, 100, 150, 200, 300, 400]
-    sparseness_levels = [0, 0.025, 0.05, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.85, 0.9, 0.925, 0.95,
-            0.975, 0.99, 0.999, 0.9999, 0.99999]
+    # fname = "E:/research/robustness_set/benchmarks/benchmark_20_05_2021_19_12_14/benchmark_completed_1621574438.7710762.pickle"
+    fname = None
 
+    benchmark = None
+    if fname:
+        with open(fname, "rb") as handle:
+            pre_trained_set = pickle.load(handle)
+            evolved_weights = pre_trained_set['evolved_weights']
 
-    use_logical_cores = True
+            info = pre_trained_set['info']
+            runs = info['runs']
+            # sample_epochs = info['sample_weights']  # TODO: Name changed inside info
+            sparseness_levels = info['sparseness_levels']
 
-    benchmark = test_fmnist(runs=runs, sample_weights=sample_weights, n_training_epochs=n_training_epochs,
-            sparseness_levels=sparseness_levels,
-            use_logical_cores=use_logical_cores)
+            use_logical_cores = True
+
+            test_fmnist_pretrained_set(evolved_weights=evolved_weights, runs=runs)
+
+    else:
+        # all have dimensions (runs, models, n_sparseness_levels)
+        runs = 1  #100
+        n_training_epochs = 31 # 0 # 400
+
+        sample_epochs = [] # [0, 5, 10, 20, 30] # , 40, 50, 75, 100, 150, 200, 300, 400]
+
+        sparseness_levels = [0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.8, 0.9, 0.925, 0.95,
+                0.975, 0.99, 0.995, 0.999]
+
+        use_logical_cores = True
+
+        benchmark = test_fmnist(runs=runs, sample_epochs=sample_epochs, n_training_epochs=n_training_epochs,
+                sparseness_levels=sparseness_levels,
+                use_logical_cores=use_logical_cores)
 
     print("Finished benchmark. Saving final results to disk")
     with open(f"{FOLDER}/benchmark_completed_{time.time()}.pickle", "wb") as handle:

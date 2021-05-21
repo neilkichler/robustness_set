@@ -41,144 +41,18 @@ from nn_functions import *
 from utils.monitor import Monitor
 import datetime
 import os
+import copy
 import time
 import json
 import sys
 import numpy as np
 from numba import njit, prange
 
+import matplotlib.pyplot as plt
+
 stderr = sys.stderr
 sys.stderr = open(os.devnull, 'w')
 sys.stderr = stderr
-
-
-
-# extras
-import matplotlib.pyplot as plt
-from sklearn.model_selection import learning_curve
-from sklearn.model_selection import ShuffleSplit
-
-
-
-# From: https://scikit-learn.org/stable/auto_examples/model_selection/plot_learning_curve.html
-def plot_learning_curve(estimator, title, X, y, axes=None, ylim=None, cv=None,
-                        n_jobs=None, train_sizes=np.linspace(.1, 1.0, 5)):
-    """
-    Generate 3 plots: the test and training learning curve, the training
-    samples vs fit times curve, the fit times vs score curve.
-
-    Parameters
-    ----------
-    estimator : estimator instance
-        An estimator instance implementing `fit` and `predict` methods which
-        will be cloned for each validation.
-
-    title : str
-        Title for the chart.
-
-    X : array-like of shape (n_samples, n_features)
-        Training vector, where ``n_samples`` is the number of samples and
-        ``n_features`` is the number of features.
-
-    y : array-like of shape (n_samples) or (n_samples, n_features)
-        Target relative to ``X`` for classification or regression;
-        None for unsupervised learning.
-
-    axes : array-like of shape (3,), default=None
-        Axes to use for plotting the curves.
-
-    ylim : tuple of shape (2,), default=None
-        Defines minimum and maximum y-values plotted, e.g. (ymin, ymax).
-
-    cv : int, cross-validation generator or an iterable, default=None
-        Determines the cross-validation splitting strategy.
-        Possible inputs for cv are:
-
-          - None, to use the default 5-fold cross-validation,
-          - integer, to specify the number of folds.
-          - :term:`CV splitter`,
-          - An iterable yielding (train, test) splits as arrays of indices.
-
-        For integer/None inputs, if ``y`` is binary or multiclass,
-        :class:`StratifiedKFold` used. If the estimator is not a classifier
-        or if ``y`` is neither binary nor multiclass, :class:`KFold` is used.
-
-        Refer :ref:`User Guide <cross_validation>` for the various
-        cross-validators that can be used here.
-
-    n_jobs : int or None, default=None
-        Number of jobs to run in parallel.
-        ``None`` means 1 unless in a :obj:`joblib.parallel_backend` context.
-        ``-1`` means using all processors. See :term:`Glossary <n_jobs>`
-        for more details.
-
-    train_sizes : array-like of shape (n_ticks,)
-        Relative or absolute numbers of training examples that will be used to
-        generate the learning curve. If the ``dtype`` is float, it is regarded
-        as a fraction of the maximum size of the training set (that is
-        determined by the selected validation method), i.e. it has to be within
-        (0, 1]. Otherwise it is interpreted as absolute sizes of the training
-        sets. Note that for classification the number of samples usually have
-        to be big enough to contain at least one sample from each class.
-        (default: np.linspace(0.1, 1.0, 5))
-    """
-    if axes is None:
-        _, axes = plt.subplots(1, 3, figsize=(20, 5))
-
-    axes[0].set_title(title)
-    if ylim is not None:
-        axes[0].set_ylim(*ylim)
-    axes[0].set_xlabel("Training examples")
-    axes[0].set_ylabel("Score")
-
-    train_sizes, train_scores, test_scores, fit_times, _ = \
-        learning_curve(estimator, X, y, cv=cv, n_jobs=n_jobs,
-                       train_sizes=train_sizes,
-                       return_times=True)
-    train_scores_mean = np.mean(train_scores, axis=1)
-    train_scores_std = np.std(train_scores, axis=1)
-    test_scores_mean = np.mean(test_scores, axis=1)
-    test_scores_std = np.std(test_scores, axis=1)
-    fit_times_mean = np.mean(fit_times, axis=1)
-    fit_times_std = np.std(fit_times, axis=1)
-
-    # Plot learning curve
-    axes[0].grid()
-    axes[0].fill_between(train_sizes, train_scores_mean - train_scores_std,
-                         train_scores_mean + train_scores_std, alpha=0.1,
-                         color="r")
-    axes[0].fill_between(train_sizes, test_scores_mean - test_scores_std,
-                         test_scores_mean + test_scores_std, alpha=0.1,
-                         color="g")
-    axes[0].plot(train_sizes, train_scores_mean, 'o-', color="r",
-                 label="Training score")
-    axes[0].plot(train_sizes, test_scores_mean, 'o-', color="g",
-                 label="Cross-validation score")
-    axes[0].legend(loc="best")
-
-    # Plot n_samples vs fit_times
-    axes[1].grid()
-    axes[1].plot(train_sizes, fit_times_mean, 'o-')
-    axes[1].fill_between(train_sizes, fit_times_mean - fit_times_std,
-                         fit_times_mean + fit_times_std, alpha=0.1)
-    axes[1].set_xlabel("Training examples")
-    axes[1].set_ylabel("fit_times")
-    axes[1].set_title("Scalability of the model")
-
-    # Plot fit_time vs score
-    axes[2].grid()
-    axes[2].plot(fit_times_mean, test_scores_mean, 'o-')
-    axes[2].fill_between(fit_times_mean, test_scores_mean - test_scores_std,
-                         test_scores_mean + test_scores_std, alpha=0.1)
-    axes[2].set_xlabel("fit_times")
-    axes[2].set_ylabel("Score")
-    axes[2].set_title("Performance of the model")
-
-    return plt
-
-
-
-
 
 
 @njit(parallel=True, fastmath=True, cache=True)
@@ -291,11 +165,10 @@ class SET_MLP:
         # Activations are also initiated by index. For the example we will have activations[2] and activations[3]
         self.activations = {}
         for i in range(len(dimensions) - 1):
-            self.w[i + 1] = create_sparse_weights(self.epsilon, dimensions[i], dimensions[i + 1])  # create sparse weight matrices
+            self.w[i + 1] = create_sparse_weights(self.epsilon, dimensions[i],
+                                                  dimensions[i + 1])  # create sparse weight matrices
             self.b[i + 1] = np.zeros(dimensions[i + 1], dtype='float32')
             self.activations[i + 2] = activations[i]
-
-
 
     def _feed_forward(self, x, drop=False):
         """
@@ -369,7 +242,7 @@ class SET_MLP:
             # compute backpropagation updates
             backpropagation_updates_numpy(a[i - 1], delta, dw.row, dw.col, dw.data)
 
-            update_params[i - 1] = (dw.tocsr(),  np.mean(delta, axis=0))
+            update_params[i - 1] = (dw.tocsr(), np.mean(delta, axis=0))
         for k, v in update_params.items():
             self._update_w_b(k, v[0], v[1])
 
@@ -394,7 +267,8 @@ class SET_MLP:
         self.b[index] += self.pdd[index] - self.weight_decay * self.b[index]
 
     def fit(self, x, y_true, x_test, y_test, loss, epochs, batch_size, learning_rate=1e-3, momentum=0.9,
-            weight_decay=0.0002, zeta=0.3, dropoutrate=0., testing=True, save_filename="", monitor=False, dropout=False):
+            weight_decay=0.0002, zeta=0.3, dropoutrate=0., testing=True, save_filename="", monitor=False,
+            dropout=False):
         """
         :param x: (array) Containing parameters
         :param y_true: (array) Containing one hot encoded labels.
@@ -402,8 +276,6 @@ class SET_MLP:
         """
         if not x.shape[0] == y_true.shape[0]:
             raise ValueError("Length of x and y arrays don't match")
-
-        self.monitor = Monitor(save_filename=save_filename) if monitor else None
 
         # Initiate the loss object with the final activation function
         self.loss = loss()
@@ -413,52 +285,33 @@ class SET_MLP:
         self.zeta = zeta
         self.dropout_rate = dropoutrate
         self.save_filename = save_filename
-        self.input_layer_connections.append(self.get_core_input_connections())
-
-
-        # TODO(Neil): Shouldn't we only save at the very end?
-        np.savez_compressed(self.save_filename + "_input_connections.npz",
-                            inputLayerConnections=self.input_layer_connections)
 
         maximum_accuracy = 0
         metrics = np.zeros((epochs, 4))
 
-        for i in range(epochs):
+        for epoch in range(epochs):
+            # Save the entire state of the weights.
+            #
+            # It can be used for comparing the different topologies of the different networks
+            # and can be used for feature selection
+            # A deepcopy is required to not overwrite the previous results.
+            self.weights_evolution.append(copy.deepcopy(self.w))
+
             # Shuffle the data
             seed = np.arange(x.shape[0])
             np.random.shuffle(seed)
             x_ = x[seed]
             y_ = y_true[seed]
 
-            if self.monitor:
-                self.monitor.start_monitor()
-
-            # training
-            t1 = datetime.datetime.now()
-
             for j in range(x.shape[0] // batch_size):
                 k = j * batch_size
-                l = (j + 1) * batch_size
-                z, a, masks = self._feed_forward(x_[k:l], dropout)
+                end = (j + 1) * batch_size
+                z, a, masks = self._feed_forward(x_[k:end], dropout)
 
-                self._back_prop(z, a, masks, y_[k:l])
-
-            t2 = datetime.datetime.now()
-
-            # Save the entire state of the weights which can be used for comparing the different
-            # topologies of the different networks
-            self.weights_evolution.append(self.w)
-
-            if self.monitor:
-                self.monitor.stop_monitor()
-
-            print("\nSET-MLP Epoch ", i)
-            print("Training time: ", t2 - t1)
+                self._back_prop(z, a, masks, y_[k:end])
 
             # test model performance on the test data at each epoch
             # this part is useful to understand model performance and can be commented for production settings
-
-            # TODO(Neil): Here we can also add the feature selection performance if we want to
             if testing:
                 t3 = datetime.datetime.now()
                 accuracy_test, activations_test = self.predict(x_test, y_test)
@@ -468,30 +321,18 @@ class SET_MLP:
                 maximum_accuracy = max(maximum_accuracy, accuracy_test)
                 loss_test = self.loss.loss(y_test, activations_test)
                 loss_train = self.loss.loss(y_true, activations_train)
-                metrics[i, 0] = loss_train
-                metrics[i, 1] = loss_test
-                metrics[i, 2] = accuracy_train
-                metrics[i, 3] = accuracy_test
+                metrics[epoch, 0] = loss_train
+                metrics[epoch, 1] = loss_test
+                metrics[epoch, 2] = accuracy_train
+                metrics[epoch, 3] = accuracy_test
 
                 print(f"Testing time: {t4 - t3}\n; Loss test: {loss_test}; \n"
-                                 f"Accuracy test: {accuracy_test}; \n"
-                                 f"Maximum accuracy val: {maximum_accuracy}")
+                      f"Accuracy test: {accuracy_test}; \n"
+                      f"Maximum accuracy val: {maximum_accuracy}")
 
-            t5 = datetime.datetime.now()
-            if i < epochs - 1:  # do not change connectivity pattern after the last epoch
+            if epoch < epochs - 1:  # do not change connectivity pattern after the last epoch
+                self.weights_evolution_fast()  # same behaviour as the one below, but it is much faster.
                 # self.weights_evolution_slow() # this implementation is more didactic, but slow.
-                self.weights_evolution_fast()   # same behaviour as the one above, but it is much faster.
-
-            t6 = datetime.datetime.now()
-            print("Weights evolution time ", t6 - t5)
-
-            # save performance metrics values in a file
-            if self.save_filename != "":
-                np.savetxt(self.save_filename +".txt", metrics)
-
-            if self.save_filename != "" and self.monitor:
-                with open(self.save_filename + "_monitor.json", 'w') as file:
-                    file.write(json.dumps(self.monitor.get_stats(), indent=4, sort_keys=True, default=str))
 
         return metrics
 
@@ -529,7 +370,17 @@ class SET_MLP:
         rows_w_new = rows_w[pruned_indices]
         cols_w_new = cols_w[pruned_indices]
 
-        return coo_matrix((vals_w_new, (rows_w_new, cols_w_new)), (self.dimensions[0], self.dimensions[1])).getnnz(axis=1)
+        return coo_matrix((vals_w_new, (rows_w_new, cols_w_new)), (self.dimensions[0], self.dimensions[1])).getnnz(
+            axis=1)
+
+
+    def vis_feature_selection(self, feature_selection):
+        image_dim = (28, 28)
+        f_data = np.reshape(feature_selection, image_dim)
+
+        plt.imshow(f_data, vmin=0, vmax=1, cmap="gray_r", interpolation=None)
+        plt.title("Title")
+        plt.show()
 
     def feature_selection(self, threshold=0.1, weights=None):
         """
@@ -545,16 +396,22 @@ class SET_MLP:
 
         feature_selection = feature_strength > absolute_threshold
 
+        self.vis_feature_selection(feature_selection)
+
         return feature_selection
 
-    def feature_selection_mean(self, threshold=0.4, weights=None):
+    def feature_selection_mean(self, sparsity=0.4, weights=None):
+        # TODO(Neil): explain why we choose only the first layer
+        # the main reason is that this first layer will already have
+        # most of the important information in it, given that everything
+        # gets backpropageted
 
         if weights is None:
             weights = self.w[i]
 
         means = np.asarray(np.mean(np.abs(weights), axis=1)).flatten()
         means_sorted = np.sort(means)
-        threshold_idx = int(means.size * threshold)
+        threshold_idx = int(means.size * sparsity)
 
         n = len(means)
         if threshold_idx == n:
@@ -562,7 +419,7 @@ class SET_MLP:
 
         means_threshold = means_sorted[threshold_idx]
 
-        feature_selection = means > means_threshold
+        feature_selection = means >= means_threshold
 
         return feature_selection
 
@@ -606,80 +463,86 @@ class SET_MLP:
         for i in range(1, self.n_layers - 1):
             # uncomment line below to stop evolution of dense weights more than 80% non-zeros
             # if self.w[i].count_nonzero() / (self.w[i].get_shape()[0]*self.w[i].get_shape()[1]) < 0.8:
-                t_ev_1 = datetime.datetime.now()
-                # converting to COO form - Added by Amar
-                wcoo = self.w[i].tocoo()
-                vals_w = wcoo.data
-                rows_w = wcoo.row
-                cols_w = wcoo.col
+            t_ev_1 = datetime.datetime.now()
+            # converting to COO form - Added by Amar
+            wcoo = self.w[i].tocoo()
+            vals_w = wcoo.data
+            rows_w = wcoo.row
+            cols_w = wcoo.col
 
-                pdcoo = self.pdw[i].tocoo()
-                vals_pd = pdcoo.data
-                rows_pd = pdcoo.row
-                cols_pd = pdcoo.col
+            pdcoo = self.pdw[i].tocoo()
+            vals_pd = pdcoo.data
+            rows_pd = pdcoo.row
+            cols_pd = pdcoo.col
 
-                largest_negative, smallest_positive = self.get_threshold_interval(i)
-                # remove the weights (W) closest to zero and modify PD as well
-                pruned_indices = (vals_w > smallest_positive) | (vals_w < largest_negative)
-                vals_w_new = vals_w[pruned_indices]
-                rows_w_new = rows_w[pruned_indices]
-                cols_w_new = cols_w[pruned_indices]
+            largest_negative, smallest_positive = self.get_threshold_interval(i)
+            # remove the weights (W) closest to zero and modify PD as well
+            pruned_indices = (vals_w > smallest_positive) | (vals_w < largest_negative)
+            vals_w_new = vals_w[pruned_indices]
+            rows_w_new = rows_w[pruned_indices]
+            cols_w_new = cols_w[pruned_indices]
 
-                new_w_row_col_index = np.stack((rows_w_new, cols_w_new), axis=-1)
-                old_pd_row_col_index = np.stack((rows_pd, cols_pd), axis=-1)
+            new_w_row_col_index = np.stack((rows_w_new, cols_w_new), axis=-1)
+            old_pd_row_col_index = np.stack((rows_pd, cols_pd), axis=-1)
 
-                new_pd_row_col_index_flag = array_intersect(old_pd_row_col_index, new_w_row_col_index)  # careful about order
+            new_pd_row_col_index_flag = array_intersect(old_pd_row_col_index,
+                                                        new_w_row_col_index)  # careful about order
 
-                vals_pd_new = vals_pd[new_pd_row_col_index_flag]
-                rows_pd_new = rows_pd[new_pd_row_col_index_flag]
-                cols_pd_new = cols_pd[new_pd_row_col_index_flag]
+            vals_pd_new = vals_pd[new_pd_row_col_index_flag]
+            rows_pd_new = rows_pd[new_pd_row_col_index_flag]
+            cols_pd_new = cols_pd[new_pd_row_col_index_flag]
 
-                self.pdw[i] = coo_matrix((vals_pd_new, (rows_pd_new, cols_pd_new)), (self.dimensions[i - 1], self.dimensions[i])).tocsr()
+            self.pdw[i] = coo_matrix((vals_pd_new, (rows_pd_new, cols_pd_new)),
+                                     (self.dimensions[i - 1], self.dimensions[i])).tocsr()
 
-                if i == 1:
-                    self.input_layer_connections.append(coo_matrix((vals_w_new, (rows_w_new, cols_w_new)),
-                                                                   (self.dimensions[i - 1], self.dimensions[i])).getnnz(axis=1))
-                    np.savez_compressed(self.save_filename + "_input_connections.npz",
-                                        inputLayerConnections=self.input_layer_connections)
+            if i == 1:
+                self.input_layer_connections.append(coo_matrix((vals_w_new, (rows_w_new, cols_w_new)),
+                                                               (self.dimensions[i - 1], self.dimensions[i])).getnnz(
+                    axis=1))
+                np.savez_compressed(self.save_filename + "_input_connections.npz",
+                                    inputLayerConnections=self.input_layer_connections)
 
-                # add new random connections
-                keep_connections = np.size(rows_w_new)
-                length_random = vals_w.shape[0]-keep_connections
-                limit = np.sqrt(6. / float(self.dimensions[i - 1]))
-                random_vals = np.random.uniform(-limit, limit, length_random)
-                zero_vals = 0*random_vals  # explicit zeros
+            # add new random connections
+            keep_connections = np.size(rows_w_new)
+            length_random = vals_w.shape[0] - keep_connections
+            limit = np.sqrt(6. / float(self.dimensions[i - 1]))
+            random_vals = np.random.uniform(-limit, limit, length_random)
+            zero_vals = 0 * random_vals  # explicit zeros
 
-                # adding  (wdok[ik,jk]!=0): condition
-                while length_random>0:
-                    ik = np.random.randint(0, self.dimensions[i - 1], size=length_random, dtype='int32')
-                    jk = np.random.randint(0, self.dimensions[i], size=length_random, dtype='int32')
+            # adding  (wdok[ik,jk]!=0): condition
+            while length_random > 0:
+                ik = np.random.randint(0, self.dimensions[i - 1], size=length_random, dtype='int32')
+                jk = np.random.randint(0, self.dimensions[i], size=length_random, dtype='int32')
 
-                    random_w_row_col_index = np.stack((ik, jk), axis=-1)
-                    random_w_row_col_index = np.unique(random_w_row_col_index, axis=0)  # removing duplicates in new rows&cols
-                    oldW_row_col_index = np.stack((rows_w_new, cols_w_new), axis=-1)
+                random_w_row_col_index = np.stack((ik, jk), axis=-1)
+                random_w_row_col_index = np.unique(random_w_row_col_index,
+                                                   axis=0)  # removing duplicates in new rows&cols
+                oldW_row_col_index = np.stack((rows_w_new, cols_w_new), axis=-1)
 
-                    unique_flag = ~array_intersect(random_w_row_col_index, oldW_row_col_index)  # careful about order & tilda
+                unique_flag = ~array_intersect(random_w_row_col_index,
+                                               oldW_row_col_index)  # careful about order & tilda
 
-                    ik_new = random_w_row_col_index[unique_flag][:,0]
-                    jk_new = random_w_row_col_index[unique_flag][:,1]
-                    # be careful - row size and col size needs to be verified
-                    rows_w_new = np.append(rows_w_new, ik_new)
-                    cols_w_new = np.append(cols_w_new, jk_new)
+                ik_new = random_w_row_col_index[unique_flag][:, 0]
+                jk_new = random_w_row_col_index[unique_flag][:, 1]
+                # be careful - row size and col size needs to be verified
+                rows_w_new = np.append(rows_w_new, ik_new)
+                cols_w_new = np.append(cols_w_new, jk_new)
 
-                    length_random = vals_w.shape[0]-np.size(rows_w_new) # this will constantly reduce lengthRandom
+                length_random = vals_w.shape[0] - np.size(rows_w_new)  # this will constantly reduce lengthRandom
 
-                # adding all the values along with corresponding row and column indices - Added by Amar
-                vals_w_new = np.append(vals_w_new, random_vals) # be careful - we can add to an existing link ?
-                # vals_pd_new = np.append(vals_pd_new, zero_vals) # be careful - adding explicit zeros - any reason??
-                if vals_w_new.shape[0] != rows_w_new.shape[0]:
-                    print("not good")
-                self.w[i] = coo_matrix((vals_w_new, (rows_w_new, cols_w_new)), (self.dimensions[i-1], self.dimensions[i])).tocsr()
+            # adding all the values along with corresponding row and column indices - Added by Amar
+            vals_w_new = np.append(vals_w_new, random_vals)  # be careful - we can add to an existing link ?
+            # vals_pd_new = np.append(vals_pd_new, zero_vals) # be careful - adding explicit zeros - any reason??
+            if vals_w_new.shape[0] != rows_w_new.shape[0]:
+                print("not good")
+            self.w[i] = coo_matrix((vals_w_new, (rows_w_new, cols_w_new)),
+                                   (self.dimensions[i - 1], self.dimensions[i])).tocsr()
 
-                # print("Number of non zeros in W and PD matrix after evolution in layer",i
-                #  ,[(self.w[i].data.shape[0]), (self.pdw[i].data.shape[0])])
+            # print("Number of non zeros in W and PD matrix after evolution in layer",i
+            #  ,[(self.w[i].data.shape[0]), (self.pdw[i].data.shape[0])])
 
-                t_ev_2 = datetime.datetime.now()
-                print("Weights evolution time for layer", i,"is", t_ev_2 - t_ev_1)
+            t_ev_2 = datetime.datetime.now()
+            # print("Weights evolution time for layer", i, "is", t_ev_2 - t_ev_1)
 
     def predict(self, x_test, y_test, batch_size=100):
         """
@@ -699,7 +562,7 @@ class SET_MLP:
         return accuracy, activations
 
 
-def load_fashion_mnist_data(no_training_samples, no_testing_samples, random_seed = 0):
+def load_fashion_mnist_data(no_training_samples, no_testing_samples, random_seed=0):
     np.random.seed(random_seed)
 
     data = np.load("data/fashion_mnist.npz")
@@ -721,6 +584,7 @@ def load_fashion_mnist_data(no_training_samples, no_testing_samples, random_seed
 
     return x_train, y_train, x_test, y_test
 
+
 '''
 def eval_subset(train, test):
 
@@ -737,7 +601,6 @@ def eval_subset(train, test):
     #     nmi, acc = unsuper
 '''
 
-
 if __name__ == "__main__":
 
     sum_training_time = 0
@@ -746,7 +609,6 @@ if __name__ == "__main__":
     index_one = lambda x: np.where(x == 1)
 
     for i in range(runs):
-
         # load data
         no_training_samples = 5000  # max 60000 for Fashion MNIST
         no_testing_samples = 1000  # max 10000 for Fshion MNIST
@@ -756,25 +618,27 @@ if __name__ == "__main__":
         no_hidden_neurons_layer = 3000
         epsilon = 13  # set the sparsity level
         zeta = 0.3  # in [0..1]. It gives the percentage of unimportant connections which are removed and replaced with random ones after every epoch
-        no_training_epochs = 1#400
+        no_training_epochs = 1  # 400
         batch_size = 40
         dropout_rate = 0.2
         learning_rate = 0.05
         momentum = 0.9
         weight_decay = 0.0002
 
-
         np.random.seed(i)
 
         # create SET-MLP (MLP with adaptive sparse connectivity trained with Sparse Evolutionary Training)
-        set_mlp = SET_MLP((x_train.shape[1], no_hidden_neurons_layer, no_hidden_neurons_layer, no_hidden_neurons_layer, y_train.shape[1]),
+        set_mlp = SET_MLP((x_train.shape[1], no_hidden_neurons_layer, no_hidden_neurons_layer, no_hidden_neurons_layer,
+                           y_train.shape[1]),
                           (Relu, Relu, Relu, Softmax), epsilon=epsilon)
 
         start_time = time.time()
         # train SET-MLP
-        set_mlp.fit(x_train, y_train, x_test, y_test, loss=CrossEntropy, epochs=no_training_epochs, batch_size=batch_size, learning_rate=learning_rate,
+        set_mlp.fit(x_train, y_train, x_test, y_test, loss=CrossEntropy, epochs=no_training_epochs,
+                    batch_size=batch_size, learning_rate=learning_rate,
                     momentum=momentum, weight_decay=weight_decay, zeta=zeta, dropoutrate=dropout_rate, testing=True,
-                    save_filename="Pretrained_results/set_mlp_" + str(no_training_samples) + "_training_samples_e" + str(epsilon) + "_rand" + str(i), monitor=True)
+                    save_filename="Pretrained_results/set_mlp_" + str(
+                        no_training_samples) + "_training_samples_e" + str(epsilon) + "_rand" + str(i), monitor=True)
 
         step_time = time.time() - start_time
         print("\nTotal training time: ", step_time)
@@ -791,4 +655,4 @@ if __name__ == "__main__":
         accuracy, _ = set_mlp.predict(selected_x_test, y_test, batch_size=100)
 
         print("\nAccuracy of the last epoch on the testing data: ", accuracy)
-    print(f"Average training time over {runs} runs is {sum_training_time/runs} seconds")
+    print(f"Average training time over {runs} runs is {sum_training_time / runs} seconds")
