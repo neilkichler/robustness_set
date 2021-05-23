@@ -330,6 +330,9 @@ class SET_MLP:
                       f"Accuracy test: {accuracy_test}; \n"
                       f"Maximum accuracy val: {maximum_accuracy}")
 
+
+            print(f"Finished epoch {epoch}")
+
             if epoch < epochs - 1:  # do not change connectivity pattern after the last epoch
                 self.weights_evolution_fast()  # same behaviour as the one below, but it is much faster.
                 # self.weights_evolution_slow() # this implementation is more didactic, but slow.

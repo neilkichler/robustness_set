@@ -1,4 +1,5 @@
 import os
+import copy
 import pickle
 import time
 import datetime
@@ -35,6 +36,133 @@ def index_one(x):
 
 def wrapper(model, x_train, current_y_train):
     model.fit(x_train, current_y_train)
+
+
+
+def single_run_dummy(run_id, set_params, models, sample_epochs, sparseness_levels, n_training_epochs):
+    # instead of returning just save everything directly inside here??
+    print(f"[run={run_id}] Job started")
+
+    n_models = len(models)
+    # TODO(Neil): Maybe make these global?
+    # load data
+    n_training_samples = 5000  # max 60000 for Fashion MNIST
+    n_testing_samples = 1000  # max 10000 for Fashion MNIST
+    n_features = 784  # Fashion MNIST has 28*28=784 pixels as features
+
+    # SET model parameters
+    n_hidden_neurons_layer = set_params['n_hidden_neurons_layer']
+    epsilon = set_params['epsilon']
+    zeta = set_params['zeta']
+    batch_size = set_params['batch_size']
+    dropout_rate = set_params['dropout_rate']
+    learning_rate = set_params['learning_rate']
+    momentum = set_params['momentum']
+    weight_decay = set_params['weight_decay']
+
+    sum_training_time = 0
+
+    np.random.seed(run_id)
+
+    x_train, y_train, x_test, y_test = load_fashion_mnist_data(n_training_samples, n_testing_samples, run_id)
+
+    # create SET-MLP (Multilayer Perceptron w/ adaptive sparse connectivity trained & Sparse Evolutionary Training)
+    set_mlp = SET_MLP((x_train.shape[1], n_hidden_neurons_layer, n_hidden_neurons_layer, n_hidden_neurons_layer,
+                       y_train.shape[1]),
+                      (Relu, Relu, Relu, Softmax), epsilon=epsilon)
+
+    start_time = datetime.datetime.now()
+
+
+    # train SET-MLP to find important features
+    set_metrics = set_mlp.fit(x_train, y_train, x_test, y_test, loss=CrossEntropy, epochs=n_training_epochs,
+                batch_size=batch_size, learning_rate=learning_rate,
+                momentum=momentum, weight_decay=weight_decay, zeta=zeta, dropoutrate=dropout_rate, testing=True,
+                save_filename="", monitor=False)
+                # save_filename="Pretrained_results/set_mlp_" + str(
+                #     n_training_samples) + "_training_samples_e" + str(epsilon) + "_rand" + str(run_id), monitor=True)
+
+    # After every epoch we store all weight layers to do feature selection and topology comparison
+    evolved_weights = set_mlp.weights_evolution
+
+    dt = datetime.datetime.now() - start_time 
+
+    result = {'run_id': run_id, 'set_params': set_params, 'set_metrics':
+            set_metrics, 'evolved_weights': evolved_weights, 'training_time':
+            dt}
+
+
+    with open(f"{FOLDER}/set_mlp_run_{run_id}.pickle", "wb") as h:
+        pickle.dump(result, h)
+
+    '''
+    n_evolutions = len(evolved_weights)
+    n_sparseness_levels = len(sparseness_levels)
+    selected_features = np.zeros((n_evolutions, n_sparseness_levels, n_features))
+
+    # TODO(Neil): Make a pandas dataframe instead?
+    dimensions = (n_evolutions, n_sparseness_levels, n_models)
+    scores = np.empty(dimensions)
+    times = np.empty(dimensions)
+
+    zero_array = [None] * n_models
+    stats = [zero_array[:] for _ in range(n_sparseness_levels)]
+
+    step_time = time.time() - start_time
+    print("\nTotal training time: ", step_time)
+    sum_training_time += step_time
+    '''
+
+    '''
+    monitor = Monitor()
+
+    for i, epoch in enumerate(sample_epochs):
+        for j, sparsity in enumerate(sparseness_levels):
+            first_layer = evolved_weights[epoch][1]
+            selected_indices = set_mlp.feature_selection_mean(sparsity, weights=first_layer)  # alternative
+            # selected_indices = set_mlp.feature_selection(fullness, weights=weights[1])
+
+            vis_feature_selection(selected_indices, epoch=epoch, sparsity=sparsity, id=run_id)
+
+            selected_features[i][j] = selected_indices
+            continue
+
+            selected_x_train = x_train[:, selected_indices]
+            selected_x_test = x_test[:, selected_indices]
+
+            for k, model in enumerate(models):
+                current_y_train = y_train
+                current_y_test = y_test
+
+                # undo one-hot encoding for SVC
+                if isinstance(model, SVC):
+                    current_y_train = np.apply_along_axis(index_one, 1, current_y_train).flatten()
+                    current_y_test = np.apply_along_axis(index_one, 1, current_y_test).flatten()
+
+                start_time = datetime.datetime.now()
+                # wrapper(model, selected_x_train, current_y_train)
+                monitor.start_monitor()
+
+                model.fit(selected_x_train, current_y_train)
+
+                monitor.stop_monitor()
+                elapsed_time = datetime.datetime.now() - start_time
+
+                score = model.score(selected_x_test, current_y_test)
+
+                print( "[run_id={:<3}|weights_epoch={:<3}|sparseness={:<6}|model={:<20}] Finished fitting w/ accuracy={:>3}".format(
+                        run_id, i, sparsity, type(model).__name__, score))
+
+                times[i][j][k] = elapsed_time.microseconds
+                scores[i][j][k] = score
+                if i == len(evolved_weights) - 1:
+                    stats[j][k] = monitor.get_stats()
+
+    '''
+    # return scores, times, stats, selected_features, evolved_weights, set_metrics
+
+
+
 
 
 def single_run(run_id, set_params, models, sample_epochs, sparseness_levels, n_training_epochs):
@@ -97,6 +225,7 @@ def single_run(run_id, set_params, models, sample_epochs, sparseness_levels, n_t
     print("\nTotal training time: ", step_time)
     sum_training_time += step_time
 
+    '''
     monitor = Monitor()
 
     for i, epoch in enumerate(sample_epochs):
@@ -141,6 +270,7 @@ def single_run(run_id, set_params, models, sample_epochs, sparseness_levels, n_t
                 if i == len(evolved_weights) - 1:
                     stats[j][k] = monitor.get_stats()
 
+    '''
     return scores, times, stats, selected_features, evolved_weights, set_metrics
 
 
@@ -230,12 +360,15 @@ def test_fmnist(runs=10, n_training_epochs=100, sample_epochs=None, sparseness_l
     n_cores = psutil.cpu_count(logical=use_logical_cores)
     with Pool(processes=n_cores) as pool:
 
-        futures = [pool.apply_async(single_run, (i, set_params, models,
+        futures = [pool.apply_async(single_run_dummy, (i, set_params, models,
             sample_epochs, sparseness_levels, n_training_epochs)) for i in range(runs)]
 
         for i, future in enumerate(futures):
             print(f'[run={i}] Starting job')
-            s, t, stats, selected_features, evolved_weights, set_metrics = future.get()
+            # s, t, stats, selected_features, evolved_weights, set_metrics = future.get()
+            future.get()
+            print(f'-----------------------------[run={i}] Finished job')
+            '''
             scores[i] = s
             times[i] = t
             set_metrics_per_run[i] = set_metrics
@@ -263,6 +396,7 @@ def test_fmnist(runs=10, n_training_epochs=100, sample_epochs=None, sparseness_l
                 exit()
             else:
                 print("No stop folder detected -> continuing")
+                '''
 
     delta_time = datetime.datetime.now() - start_test
 
@@ -306,8 +440,8 @@ if __name__ == "__main__":
 
     else:
         # all have dimensions (runs, models, n_sparseness_levels)
-        runs = 1  #100
-        n_training_epochs = 31 # 0 # 400
+        runs = 100
+        n_training_epochs = 400
 
         sample_epochs = [] # [0, 5, 10, 20, 30] # , 40, 50, 75, 100, 150, 200, 300, 400]
 
@@ -320,9 +454,11 @@ if __name__ == "__main__":
                 sparseness_levels=sparseness_levels,
                 use_logical_cores=use_logical_cores)
 
+        '''
     print("Finished benchmark. Saving final results to disk")
     with open(f"{FOLDER}/benchmark_completed_{time.time()}.pickle", "wb") as handle:
         pickle.dump(benchmark, handle)
+        '''
 
 
     # with open("benchmark.pickle", "rb") as handle:
