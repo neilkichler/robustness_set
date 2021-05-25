@@ -90,7 +90,7 @@ def single_run_dummy(run_id, set_params, models, sample_epochs,
 
         dt = datetime.datetime.now() - start_time 
 
-        step_time = time.time() - start_time
+        step_time = datetime.datetime.now() - start_time
         print("\nTotal training time: ", step_time)
         sum_training_time += step_time
 
@@ -170,7 +170,7 @@ def single_run_dummy(run_id, set_params, models, sample_epochs,
 
 
     results = {'set': set_pretrained, 'sparseness_levels': sparseness_levels, 'models': models, 'scores': scores, 'times': times,
-            'stats': stats, 'dimensions': dimensions,
+            'stats': stats, 'sample_epochs': sample_epochs, 'dimensions': dimensions,
                'selected_features': selected_features}
 
 
@@ -472,7 +472,7 @@ if __name__ == "__main__":
         runs = 50
         n_training_epochs = 400
 
-        sample_epochs = [0, 5, 10, 20, 30, 40, 50, 75, 100, 150, 200, 300, 400]
+        sample_epochs = [0, 5, 10, 20, 30, 40, 50, 75, 100, 150, 200, 300, 399]
 
         sparseness_levels = [0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.8, 0.9, 0.925, 0.95,
                 0.975, 0.99, 0.995, 0.999]
