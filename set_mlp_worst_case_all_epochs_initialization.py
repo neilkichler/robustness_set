@@ -22,7 +22,7 @@ import psutil
 
 FOLDER = "benchmarks"
 FOLDER_NEW = ""
-SUB_FOLDER = "set_worst_case"
+SUB_FOLDER = "set_worst_case_all_epochs"
 SUB_FOLDER_PRETRAINED_WEIGHTS = "benchmark"
 RUN_PREFIX = "set_mlp_run"
 EXTENSION = ".pickle"
@@ -58,7 +58,7 @@ def feature_selection_mean(sparsity=0.4, weights=None):
     return feature_selection
 
 
-def single_run_worst_case(run_id, n_training_epochs):
+def single_run_worst_case_all_epochs(run_id, n_training_epochs):
     log.info(f"[run={run_id}] Job started")
 
     # load data
@@ -94,9 +94,7 @@ def single_run_worst_case(run_id, n_training_epochs):
 
     # Set the weights initially to the opposite of the previously learned weights
     for k, v in evolved_weights.items():
-        # currently we only edit the first layer
-        # we might want to change more than that in the future
-        if k > 1:
+        if k > 3:
             break
 
         features_old = feature_selection_mean(sparsity=0.7, weights=v)
@@ -123,8 +121,10 @@ def single_run_worst_case(run_id, n_training_epochs):
 
         # Adjust prob to get to the same density as before
         # Here we might do something more clever later on
+        i = 1
         while np.count_nonzero(mask_weights[mask_weights >= prob]) < v.getnnz():
             prob -= 0.001
+            i += 1
 
         # generate an Erdos Renyi sparse weights mask
         n_params = np.count_nonzero(mask_weights[mask_weights >= prob])
@@ -169,13 +169,13 @@ def single_run_worst_case(run_id, n_training_epochs):
     log.info(f"-------Finished testing run: {run_id}")
 
 
-def test_SET_fmnist_worst_case(n_runs=10, n_training_epochs=100, use_logical_cores=True, use_pretrained=False):
+def test_SET_fmnist_worst_case_all_epochs(n_runs=10, n_training_epochs=100, use_logical_cores=True, use_pretrained=False):
 
     start_test = datetime.datetime.now()
     n_cores = psutil.cpu_count(logical=use_logical_cores)
     with Pool(processes=n_cores) as pool:
 
-        futures = [pool.apply_async(single_run_worst_case, (i,
+        futures = [pool.apply_async(single_run_worst_case_all_epochs, (i,
             n_training_epochs)) for i in range(n_runs)]
 
         for i, future in enumerate(futures):
@@ -208,5 +208,5 @@ if __name__ == "__main__":
 
     log.info(f"Start {__file__}")
 
-    test_SET_fmnist_worst_case(n_runs=n_runs, n_training_epochs=n_training_epochs,
+    test_SET_fmnist_worst_case_all_epochs(n_runs=n_runs, n_training_epochs=n_training_epochs,
             use_logical_cores=use_logical_cores)

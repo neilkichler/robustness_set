@@ -49,6 +49,11 @@ import numpy as np
 from numba import njit, prange
 
 import matplotlib.pyplot as plt
+import logging
+
+
+logging.basicConfig(filename=f'{__file__}.log', level=logging.INFO, format='%(asctime)s %(message)s', filemode='w')
+log = logging.getLogger()
 
 stderr = sys.stderr
 sys.stderr = open(os.devnull, 'w')
@@ -105,9 +110,11 @@ def create_sparse_weights(epsilon, n_rows, n_cols):
     # generate an Erdos Renyi sparse weights mask
     weights = lil_matrix((n_rows, n_cols))
     n_params = np.count_nonzero(mask_weights[mask_weights >= prob])
+
     weights[mask_weights >= prob] = np.random.uniform(-limit, limit, n_params)
-    print("Create sparse matrix with ", weights.getnnz(), " connections and ",
-          (weights.getnnz() / (n_rows * n_cols)) * 100, "% density level")
+
+    log.info(f"Create sparse matrix with {weights.getnnz()} connections and {(weights.getnnz() / (n_rows * n_cols)) * 100} % density level")
+
     weights = weights.tocsr()
     return weights
 
@@ -268,7 +275,7 @@ class SET_MLP:
 
     def fit(self, x, y_true, x_test, y_test, loss, epochs, batch_size, learning_rate=1e-3, momentum=0.9,
             weight_decay=0.0002, zeta=0.3, dropoutrate=0., testing=True, save_filename="", monitor=False,
-            dropout=False):
+            dropout=False, run_id=-1):
         """
         :param x: (array) Containing parameters
         :param y_true: (array) Containing one hot encoded labels.
@@ -297,6 +304,7 @@ class SET_MLP:
             # A deepcopy is required to not overwrite the previous results.
             self.weights_evolution.append(copy.deepcopy(self.w))
 
+            t1 = datetime.datetime.now()
             # Shuffle the data
             seed = np.arange(x.shape[0])
             np.random.shuffle(seed)
@@ -309,6 +317,8 @@ class SET_MLP:
                 z, a, masks = self._feed_forward(x_[k:end], dropout)
 
                 self._back_prop(z, a, masks, y_[k:end])
+
+            t2 = datetime.datetime.now()
 
             # test model performance on the test data at each epoch
             # this part is useful to understand model performance and can be commented for production settings
@@ -326,12 +336,13 @@ class SET_MLP:
                 metrics[epoch, 2] = accuracy_train
                 metrics[epoch, 3] = accuracy_test
 
-                print(f"Testing time: {t4 - t3}\n; Loss test: {loss_test}; \n"
-                      f"Accuracy test: {accuracy_test}; \n"
-                      f"Maximum accuracy val: {maximum_accuracy}")
-
-
-            print(f"Finished epoch {epoch}")
+                log.info(f"[run_id={run_id}] ----------------")
+                log.info(f"[run_id={run_id}] Training time: {t2 - t1}s")
+                log.info(f"[run_id={run_id}] Testing time: {t4 - t3}s")
+                log.info(f"[run_id={run_id}] Loss test: {loss_test}")
+                log.info(f"[run_id={run_id}] Accuracy test: {accuracy_test}")
+                log.info(f"[run_id={run_id}] Maximum accuracy val: {maximum_accuracy}")
+                log.info(f"[run_id={run_id}] -- Finished epoch {epoch} --")
 
             if epoch < epochs - 1:  # do not change connectivity pattern after the last epoch
                 self.weights_evolution_fast()  # same behaviour as the one below, but it is much faster.
@@ -644,7 +655,7 @@ if __name__ == "__main__":
                         no_training_samples) + "_training_samples_e" + str(epsilon) + "_rand" + str(i), monitor=True)
 
         step_time = time.time() - start_time
-        print("\nTotal training time: ", step_time)
+        log.info("\nTotal training time: ", step_time)
         sum_training_time += step_time
 
         # selected_indices = set_mlp.feature_selection()
@@ -657,5 +668,5 @@ if __name__ == "__main__":
         # TODO(Neil): here we don't actually have to test SET-MLP, but all the other classifiers
         accuracy, _ = set_mlp.predict(selected_x_test, y_test, batch_size=100)
 
-        print("\nAccuracy of the last epoch on the testing data: ", accuracy)
-    print(f"Average training time over {runs} runs is {sum_training_time / runs} seconds")
+        log.info("\nAccuracy of the last epoch on the testing data: ", accuracy)
+    log.info(f"Average training time over {runs} runs is {sum_training_time / runs} seconds")

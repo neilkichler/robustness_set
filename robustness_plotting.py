@@ -14,18 +14,6 @@ EXTENSION = ".png"
 DPI = 300
 
 
-def current_method_name():
-    # [0] is this method's frame, [1] is the parent's frame - which we want
-    return inspect.stack()[1].function
-
-
-def get_model_names(data):
-
-    models = data['models']
-    model_names = [type(m).__name__ for m in models]
-    return model_names
-
-
 
 def plot_sparsity_vs_accuracy_single(data, save_plot=False, show_plot=False):
 
