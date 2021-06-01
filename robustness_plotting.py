@@ -2,7 +2,12 @@ import re
 import os
 import pickle
 import inspect
+import psutil
+from multiprocessing import Pool
 
+from scipy.sparse import save_npz, load_npz
+
+from utils_plotting import current_method_name, get_model_names
 import matplotlib.pyplot as plt
 from mpl_toolkits.axes_grid1 import AxesGrid
 
@@ -10,10 +15,15 @@ import numpy as np
 
 FOLDER = "RobustnessResults/new_result"
 BENCHMARK_FOLDER = "benchmarks/"
+TOPOLOGY_FOLDER = "topo/"
 EXTENSION = ".png"
 DPI = 300
 
-
+def clear_console():
+    cmd = 'clear'
+    if os.name in ('nt', 'dos'): # Windows detected
+        cmd = 'cls'
+    os.system(cmd)
 
 def plot_sparsity_vs_accuracy_single(data, save_plot=False, show_plot=False):
 
@@ -567,13 +577,49 @@ def plot_feature_selection_aggregate(data, show_plot=False, show_cbar=False, sav
         plt.show()
 
 
+def save_topology_single_run(folder, f):
+    frun_name = f.partition(".pickle")[0]
+    fname = folder + "/" + f
+    with open(fname, "rb") as handle:
+        benchmark = pickle.load(handle)
+        # weight_layers = benchmark['set']['evolved_weights']
+        weight_layers = benchmark['evolved_weights']
+        sample_epochs = benchmark['sample_epochs']
+
+        for sample in sample_epochs:
+
+            sample_folder = f"{full_folder_name}/{TOPOLOGY_FOLDER}{frun_name}/epoch_%.3d" % sample
+            if not os.path.exists(sample_folder):
+                os.makedirs(sample_folder)
+
+            for i, layer in enumerate(weight_layers[sample].values()):
+                topo_fname = f"{sample_folder}/weight_l{i}"
+                save_npz(topo_fname, layer)
+
+
+def save_topology(folder, flist, use_logical_cores=False, debug_info=True):
+    print(f"Starting to save topologies of {len(flist)} files")
+    n_cores = psutil.cpu_count(logical=use_logical_cores)
+    with Pool(processes=n_cores) as pool:
+
+        futures = [pool.apply_async(save_topology_single_run, (folder, frun)) for frun in flist]
+
+        n_futures = len(futures)
+        for i, future in enumerate(futures):
+            future.get()
+            if debug_info:
+                print(f"Finished saving weight-layers: ({i+1}/{n_futures})")
+
+
 if __name__ == "__main__":
 
     if not os.path.exists(FOLDER):
         os.makedirs(FOLDER)
 
-    benchmark_prefix = "benchmark_"
-    benchmark_run_prefix = "fmnist_"
+    benchmark_prefix = "set_worst_case_all_epochs_"
+    benchmark_run_prefix = "set_mlp_run_"
+    # benchmark_prefix = "benchmark_"
+    # benchmark_run_prefix = "fmnist_"
 
     benchmark_folders = os.listdir(BENCHMARK_FOLDER)
     # pick the most recent benchmark
@@ -645,18 +691,26 @@ if __name__ == "__main__":
         with open(fname_all_runs, "wb") as h:
             pickle.dump(all_runs, h)
 
-    all_runs = []
+    save_topology_all_runs = True
+    if not os.path.exists(full_folder_name + "/topo"):
+        os.makedirs(full_folder_name + "/topo")
+        save_topology_all_runs = True
 
-    with open(fname_all_runs, "rb") as h:
-        all_runs = pickle.load(h)
+    if save_topology_all_runs:
+        save_topology(full_folder_name, flist[1:])
 
 
-    # TODO(Neil): time plot seems very noisy? Maybe due to parralel execution?
-    #             it isn't very interesting for our study anyways
-    plot_sparsity_vs_time_all_runs(all_runs, show_plot=True, save_plot=True)
-    plot_feature_selection_aggregate_separate_runs(all_runs, title=True, show_plot=True, save_plot=True)
-    plot_sparsity_vs_accuracy_all_runs(all_runs, show_plot=True, save_plot=True)
-    plot_epoch_vs_accuracy_all_runs(all_runs, show_plot=True, save_plot=True)
-    plot_feature_selection_aggregate_per_epoch(all_runs, show_plot=True,
-            save_plot=True, title=True)
-    # plt.show()
+    plotting = False
+
+    if plotting:
+        all_runs = []
+
+        with open(fname_all_runs, "rb") as h:
+            all_runs = pickle.load(h)
+
+        plot_sparsity_vs_time_all_runs(all_runs, show_plot=True, save_plot=True)
+        plot_feature_selection_aggregate_separate_runs(all_runs, title=True, show_plot=True, save_plot=True)
+        plot_sparsity_vs_accuracy_all_runs(all_runs, show_plot=True, save_plot=True)
+        plot_epoch_vs_accuracy_all_runs(all_runs, show_plot=True, save_plot=True)
+        plot_feature_selection_aggregate_per_epoch(all_runs, show_plot=True,
+                save_plot=True, title=True)
