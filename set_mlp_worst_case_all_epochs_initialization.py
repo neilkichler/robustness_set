@@ -146,9 +146,9 @@ def single_run_worst_case_all_epochs(run_id, n_training_epochs):
 
     # train SET-MLP to find important features
     set_metrics = set_mlp.fit(x_train, y_train, x_test, y_test, loss=CrossEntropy, epochs=n_training_epochs,
-                batch_size=batch_size, learning_rate=learning_rate,
-                run_id=run_id, momentum=momentum, weight_decay=weight_decay, zeta=zeta, dropoutrate=dropout_rate, testing=True,
-                save_filename="Pretrained_Worst_results/set_mlp_" + str(
+                              batch_size=batch_size, learning_rate=learning_rate,
+                              run_id=run_id, momentum=momentum, weight_decay=weight_decay, zeta=zeta, dropout_rate=dropout_rate, testing=True,
+                              save_filename="Pretrained_Worst_results/set_mlp_" + str(
                     n_training_samples) + "_training_samples_e" + str(epsilon) + "_rand" + str(run_id), monitor=False)
 
     # After every epoch we store all weight layers to do feature selection and topology comparison

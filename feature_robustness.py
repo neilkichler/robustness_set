@@ -3,6 +3,7 @@ import copy
 import pickle
 import time
 import datetime
+import logging
 
 import numpy as np
 from sklearn.ensemble import ExtraTreesClassifier
@@ -16,9 +17,10 @@ from multiprocessing import Pool
 from utils.monitor import Monitor
 import psutil
 
+import matplotlib.pyplot as plt
+
 FOLDER = "benchmarks"
 
-import matplotlib.pyplot as plt
 
 def vis_feature_selection(feature_selection, epoch=0, sparsity=0.5, id=0):
     image_dim = (28, 28)
@@ -34,13 +36,70 @@ def index_one(x):
     return np.where(x == 1)
 
 
-def wrapper(model, x_train, current_y_train):
-    model.fit(x_train, current_y_train)
+def single_run_density(run_id, set_params, density_levels, n_training_epochs, fname=""):
+    """
+    the density levels are the set epsilon sparsity levels
+    """
+    print(f"[run={run_id}] Job started")
+    n_training_samples = 5000  # max 60000 for Fashion MNIST
+    n_testing_samples = 1000  # max 10000 for Fashion MNIST
+    n_features = 784  # Fashion MNIST has 28*28=784 pixels as features
 
+    # SET model parameters
+    n_hidden_neurons_layer = set_params['n_hidden_neurons_layer']
+    zeta = set_params['zeta']
+    batch_size = set_params['batch_size']
+    dropout_rate = set_params['dropout_rate']
+    learning_rate = set_params['learning_rate']
+    momentum = set_params['momentum']
+    weight_decay = set_params['weight_decay']
+
+    sum_training_time = 0
+
+    np.random.seed(run_id)
+
+    x_train, y_train, x_test, y_test = load_fashion_mnist_data(n_training_samples, n_testing_samples, run_id)
+
+    if os.path.isfile(fname):
+        with open(fname, "rb") as h:
+            results = pickle.load(h)
+    else:
+        results = {'density_levels': density_levels, 'runs': []}
+
+    for epsilon in density_levels:
+        logging.info(f"[run_id={run_id}] Starting SET-Sparsity: epsilon={epsilon}")
+        set_params['epsilon'] = epsilon
+        # create SET-MLP (Multilayer Perceptron w/ adaptive sparse connectivity trained & Sparse Evolutionary Training)
+
+        set_mlp = SET_MLP((x_train.shape[1], n_hidden_neurons_layer, n_hidden_neurons_layer, n_hidden_neurons_layer,
+                           y_train.shape[1]), (Relu, Relu, Relu, Softmax), epsilon=epsilon)
+
+        start_time = datetime.datetime.now()
+        # train SET-MLP to find important features
+        set_metrics = set_mlp.fit(x_train, y_train, x_test, y_test, loss=CrossEntropy, epochs=n_training_epochs,
+                              batch_size=batch_size, learning_rate=learning_rate,
+                              momentum=momentum, weight_decay=weight_decay, zeta=zeta, dropout_rate=dropout_rate,
+                              testing=True, run_id=run_id,
+                              save_filename="", monitor=False)
+
+        dt = datetime.datetime.now() - start_time
+
+        # After every epoch we store all weight layers to do feature selection and topology comparison
+        evolved_weights = set_mlp.weights_evolution
+
+        run_result = {'run_id': run_id, 'set_params': copy.deepcopy(set_params), 'set_metrics': set_metrics,
+                      'evolved_weights': evolved_weights, 'training_time': dt}
+
+        results['runs'].append({'set_sparsity': epsilon, 'run': run_result})
+
+        fname = f"{FOLDER}/set_mlp_density_run_{run_id}.pickle"
+        # save preliminary results
+        with open(fname, "wb") as h:
+            pickle.dump(results, h)
 
 
 def single_run(run_id, set_params, models, sample_epochs,
-        sparseness_levels, n_training_epochs, use_pretrained=False):
+               sparseness_levels, n_training_epochs, use_pretrained=False):
     # instead of returning just save everything directly inside here??
     print(f"[run={run_id}] Job started")
 
@@ -71,37 +130,34 @@ def single_run(run_id, set_params, models, sample_epochs,
         # create SET-MLP (Multilayer Perceptron w/ adaptive sparse connectivity trained & Sparse Evolutionary Training)
 
         set_mlp = SET_MLP((x_train.shape[1], n_hidden_neurons_layer, n_hidden_neurons_layer, n_hidden_neurons_layer,
-                   y_train.shape[1]),
-                  (Relu, Relu, Relu, Softmax), epsilon=epsilon)
-
+                           y_train.shape[1]), (Relu, Relu, Relu, Softmax), epsilon=epsilon)
 
         start_time = datetime.datetime.now()
 
         # train SET-MLP to find important features
         set_metrics = set_mlp.fit(x_train, y_train, x_test, y_test, loss=CrossEntropy, epochs=n_training_epochs,
-                    batch_size=batch_size, learning_rate=learning_rate,
-                    momentum=momentum, weight_decay=weight_decay, zeta=zeta, dropoutrate=dropout_rate, testing=True,
-                    save_filename="", monitor=False)
-                    # save_filename="Pretrained_results/set_mlp_" + str(
-                    #     n_training_samples) + "_training_samples_e" + str(epsilon) + "_rand" + str(run_id), monitor=True)
+                                  batch_size=batch_size, learning_rate=learning_rate,
+                                  momentum=momentum, weight_decay=weight_decay, zeta=zeta, dropout_rate=dropout_rate,
+                                  testing=True,
+                                  save_filename="", monitor=False)
+        # save_filename="Pretrained_results/set_mlp_" + str(
+        #     n_training_samples) + "_training_samples_e" + str(epsilon) + "_rand" + str(run_id), monitor=True)
 
         # After every epoch we store all weight layers to do feature selection and topology comparison
         evolved_weights = set_mlp.weights_evolution
 
-        dt = datetime.datetime.now() - start_time 
+        dt = datetime.datetime.now() - start_time
 
         step_time = datetime.datetime.now() - start_time
         print("\nTotal training time: ", step_time)
         sum_training_time += step_time
 
         result = {'run_id': run_id, 'set_params': set_params, 'set_metrics':
-                set_metrics, 'evolved_weights': evolved_weights, 'training_time':
-                dt}
-
+            set_metrics, 'evolved_weights': evolved_weights, 'training_time':
+                      dt}
 
         with open(f"{FOLDER}/set_mlp_run_{run_id}.pickle", "wb") as h:
             pickle.dump(result, h)
-
 
     set_pretrained = None
     # TODO(Neil): hardcoded path
@@ -109,8 +165,6 @@ def single_run(run_id, set_params, models, sample_epochs,
     fname = f"benchmarks/benchmark_22_05_2021_13_59_10/set_mlp_run_{run_id}.pickle"
     with open(fname, "rb") as h:
         set_pretrained = pickle.load(h)
-
-
 
     evolved_weights = set_pretrained['evolved_weights']
     n_evolutions = len(evolved_weights)
@@ -160,7 +214,8 @@ def single_run(run_id, set_params, models, sample_epochs,
 
                 score = model.score(selected_x_test, current_y_test)
 
-                print( "[run_id={:<3}|weights_epoch={:<3}|sparseness={:<6}|model={:<20}] Finished fitting w/ accuracy={:>3}".format(
+                print(
+                    "[run_id={:<3}|weights_epoch={:<3}|sparseness={:<6}|model={:<20}] Finished fitting w/ accuracy={:>3}".format(
                         run_id, epoch, sparsity, type(model).__name__, score))
 
                 times[i][j][k] = elapsed_time.microseconds
@@ -168,28 +223,15 @@ def single_run(run_id, set_params, models, sample_epochs,
                 if i == len(evolved_weights) - 1:
                     stats[j][k] = monitor.get_stats()
 
-
-    results = {'set': set_pretrained, 'sparseness_levels': sparseness_levels, 'models': models, 'scores': scores, 'times': times,
-            'stats': stats, 'sample_epochs': sample_epochs, 'dimensions': dimensions,
+    results = {'set': set_pretrained, 'sparseness_levels': sparseness_levels, 'models': models, 'scores': scores,
+               'times': times,
+               'stats': stats, 'sample_epochs': sample_epochs, 'dimensions': dimensions,
                'selected_features': selected_features}
-
 
     with open(f"{FOLDER}/fmnist_results_{run_id}.pickle", "wb") as h:
         pickle.dump(results, h)
 
     print(f"-------Finished testing run: {run_id}")
-
-
-
-
-def chebychev_grid(lower, upper, n):
-    # See: https://en.wikipedia.org/wiki/Chebyshev_nodes
-
-    return [0.5 * (lower + upper) + 0.5 * (upper - lower) * -np.cos(((2 * i + 1) * np.pi) / (2 * n + 2))
-            for i in range(n)]
-
-
-
 
 
 def feature_selection_mean(sparsity=0.4, weights=None):
@@ -213,9 +255,8 @@ def feature_selection_mean(sparsity=0.4, weights=None):
     return feature_selection
 
 
-
-def test_fmnist_pretrained_set(evolved_weights, runs=10, n_training_epochs=100, sample_epochs=None, sparseness_levels=None, use_logical_cores=True):
-
+def test_fmnist_pretrained_set(evolved_weights, runs=10, n_training_epochs=100, sample_epochs=None,
+                               sparseness_levels=None, use_logical_cores=True):
     results = {}
     max_finished = 0
 
@@ -231,8 +272,7 @@ def test_fmnist_pretrained_set(evolved_weights, runs=10, n_training_epochs=100, 
 
 
 def test_fmnist(runs=10, n_training_epochs=100, sample_epochs=None,
-        sparseness_levels=None, use_logical_cores=True, use_pretrained=False):
-
+                sparseness_levels=None, use_logical_cores=True, use_pretrained=False):
     # use some default values if none are given
     if sparseness_levels is None:
         sparseness_levels = [0.1, 0.5, 0.9]
@@ -274,7 +314,7 @@ def test_fmnist(runs=10, n_training_epochs=100, sample_epochs=None,
     # SET model parameters
     set_params = {'n_hidden_neurons_layer': 3000,
                   'epsilon': 13,  # set the sparsity level
-                  'zeta': 0.3,    # in [0..1]. Percentage of unimportant connections to be removed and replaced
+                  'zeta': 0.3,  # in [0..1]. Percentage of unimportant connections to be removed and replaced
                   'batch_size': 40, 'dropout_rate': 0, 'learning_rate': 0.05, 'momentum': 0.9, 'weight_decay': 0.0002}
 
     start_test = datetime.datetime.now()
@@ -282,42 +322,14 @@ def test_fmnist(runs=10, n_training_epochs=100, sample_epochs=None,
     with Pool(processes=n_cores) as pool:
 
         futures = [pool.apply_async(single_run, (i, set_params, models,
-            sample_epochs, sparseness_levels, n_training_epochs, use_pretrained)) for i in range(runs)]
+                                                 sample_epochs, sparseness_levels, n_training_epochs, use_pretrained))
+                   for i in range(runs)]
 
         for i, future in enumerate(futures):
             print(f'[run={i}] Starting job')
             # s, t, stats, selected_features, evolved_weights, set_metrics = future.get()
             future.get()
             print(f'-----------------------------[run={i}] Finished job')
-            '''
-            scores[i] = s
-            times[i] = t
-            set_metrics_per_run[i] = set_metrics
-            stats_.append(stats)
-            selected_features_per_run.append(selected_features)
-            all_evolved_weights.append(evolved_weights)
-            print(f'[run={i}] Finished job')
-            print(f'Updating results dict')
-            print(f'Saving results in new pickle')
-
-            max_finished = max(i, max_finished)
-            info['runs'] = max_finished
-
-            results = {'info': info, 'set_params': set_params, 'models': models, 'scores': scores, 'times': times,
-                       'stats': stats,
-                       'selected_features': selected_features_per_run, 'evolved_weights': all_evolved_weights}
-
-            with open(f"{FOLDER}/benchmark_upto_run_{max_finished}_{time.time()}.pickle", "wb") as h:
-                pickle.dump(results, h)
-
-            print(f"---------- Saved up to run: {max_finished} ----------")
-
-            if os.path.exists(f"{FOLDER}/stop"):
-                print("Stop folder detected -> stopping")
-                exit()
-            else:
-                print("No stop folder detected -> continuing")
-                '''
 
     delta_time = datetime.datetime.now() - start_test
 
@@ -327,8 +339,46 @@ def test_fmnist(runs=10, n_training_epochs=100, sample_epochs=None,
     return results
 
 
-if __name__ == "__main__":
+def fmnist_train_set_differnt_densities(runs=10, n_training_epochs=100, set_sparsity_levels=None, use_logical_cores=True):
+    # SET model parameters
+    set_params = {'n_hidden_neurons_layer': 3000,
+                  'epsilon': 13,  # set the sparsity level
+                  'zeta': 0.3,  # in [0..1]. Percentage of unimportant connections to be removed and replaced
+                  'batch_size': 40, 'dropout_rate': 0, 'learning_rate': 0.05, 'momentum': 0.9, 'weight_decay': 0.0002}
 
+    start_test = datetime.datetime.now()
+    n_cores = psutil.cpu_count(logical=use_logical_cores)
+    with Pool(processes=n_cores) as pool:
+        futures = []
+        for i in range(runs):
+            remaining_density_levels = copy.copy(set_sparsity_levels)
+            # check if results already exist
+            fname = f"{FOLDER}/set_mlp_density_run_{i}.pickle"
+            if os.path.isfile(fname):
+                with open(fname, "rb") as h:
+                    result = pickle.load(h)
+                    # try:
+                    #     result = pickle.load(h)
+                    # except EOFError:
+                    #     print("Invalid file, creating a new one for this run")
+                    #     pickle.dump([], h)
+                    for el in result['runs']:
+                        remaining_density_levels.remove(el['set_sparsity'])
+
+            futures.append(pool.apply_async(single_run_density, (i, set_params, remaining_density_levels, n_training_epochs, fname)))
+
+        for i, future in enumerate(futures):
+            print(f'[run={i}] Starting job')
+            future.get()
+            print(f'-----------------------------[run={i}] Finished job')
+
+    delta_time = datetime.datetime.now() - start_test
+
+    print("-" * 30)
+    print(f"Finished the entire process after: {delta_time.seconds}s")
+
+
+if __name__ == "__main__":
     if not os.path.exists(FOLDER):
         os.makedirs(FOLDER)
 
@@ -337,52 +387,64 @@ if __name__ == "__main__":
     FOLDER = f"{FOLDER}/{sub_folder}_{datetime.datetime.now().strftime(date_format)}"
     os.makedirs(FOLDER)
 
-
     evolved_weigths = None
     # fname = "E:/research/robustness_set/benchmarks/benchmark_18_05_2021_21_57_42/benchmark_upto_run_43_1621438657.8744707.pickle"
 
     # fname = "E:/research/robustness_set/benchmarks/benchmark_20_05_2021_19_12_14/benchmark_completed_1621574438.7710762.pickle"
     fname = None
 
-    benchmark = None
-    if fname:
-        with open(fname, "rb") as handle:
-            pre_trained_set = pickle.load(handle)
-            evolved_weights = pre_trained_set['evolved_weights']
+    test_density = True
 
-            info = pre_trained_set['info']
-            runs = info['runs']
-            # sample_epochs = info['sample_weights']  # TODO: Name changed inside info
-            sparseness_levels = info['sparseness_levels']
+    if test_density:
+        runs = 32
+        n_training_epochs = 200
+        set_sparsity_levels = [1, 2, 3, 4, 5, 6, 13, 32, 64, 128, 256] # , 512, 1024]
+        # the levels are chosen to have [0.16, 0.5, 1, 2, 5, 10, 20, 40, 80, 100] % density in the first layer
+        use_logical_cores = False
+        # FOLDER = "benchmarks/benchmark_02_06_2021_13_02_23"
 
-            use_logical_cores = True
-
-            test_fmnist_pretrained_set(evolved_weights=evolved_weights, runs=runs)
+        fmnist_train_set_differnt_densities(runs, n_training_epochs, set_sparsity_levels, use_logical_cores=use_logical_cores)
 
     else:
-        # all have dimensions (runs, models, n_sparseness_levels)
-        runs = 50
-        n_training_epochs = 400
+        benchmark = None
+        if fname:
+            with open(fname, "rb") as handle:
+                pre_trained_set = pickle.load(handle)
+                evolved_weights = pre_trained_set['evolved_weights']
 
-        sample_epochs = [0, 5, 10, 20, 30, 40, 50, 75, 100, 150, 200, 300, 399]
+                info = pre_trained_set['info']
+                runs = info['runs']
+                # sample_epochs = info['sample_weights']  # TODO: Name changed inside info
+                sparseness_levels = info['sparseness_levels']
 
-        sparseness_levels = [0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.8, 0.9, 0.925, 0.95,
-                0.975, 0.99, 0.995, 0.999]
+                use_logical_cores = True
 
-        use_logical_cores = True
+                test_fmnist_pretrained_set(evolved_weights=evolved_weights, runs=runs)
 
-        benchmark = test_fmnist(runs=runs, sample_epochs=sample_epochs, n_training_epochs=n_training_epochs,
-                sparseness_levels=sparseness_levels,
-                use_logical_cores=use_logical_cores, use_pretrained=True)
+        else:
+            # all have dimensions (runs, models, n_sparseness_levels)
+            runs = 50
+            n_training_epochs = 400
 
-        '''
-    print("Finished benchmark. Saving final results to disk")
-    with open(f"{FOLDER}/benchmark_completed_{time.time()}.pickle", "wb") as handle:
-        pickle.dump(benchmark, handle)
-        '''
+            sample_epochs = [0, 5, 10, 20, 30, 40, 50, 75, 100, 150, 200, 300, 399]
 
+            sparseness_levels = [0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.8, 0.9, 0.925, 0.95,
+                                 0.975, 0.99, 0.995, 0.999]
 
-    # with open("benchmark.pickle", "rb") as handle:
-    #    b2 = pickle.load(handle)
+            use_logical_cores = True
+            use_pretrained = False
 
-    # print(benchmark == b2)
+            benchmark = test_fmnist(runs=runs, sample_epochs=sample_epochs, n_training_epochs=n_training_epochs,
+                                    sparseness_levels=sparseness_levels,
+                                    use_logical_cores=use_logical_cores, use_pretrained=use_pretrained)
+
+            '''
+        print("Finished benchmark. Saving final results to disk")
+        with open(f"{FOLDER}/benchmark_completed_{time.time()}.pickle", "wb") as handle:
+            pickle.dump(benchmark, handle)
+            '''
+
+        # with open("benchmark.pickle", "rb") as handle:
+        #    b2 = pickle.load(handle)
+
+        # print(benchmark == b2)

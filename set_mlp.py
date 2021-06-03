@@ -46,14 +46,15 @@ import time
 import json
 import sys
 import numpy as np
+from numpy.core.multiarray import ndarray
 from numba import njit, prange
 
 import matplotlib.pyplot as plt
 import logging
 
-
 logging.basicConfig(filename=f'{__file__}.log', level=logging.INFO, format='%(asctime)s %(message)s', filemode='w')
 log = logging.getLogger()
+# log.setLevel(logging.INFO)
 
 stderr = sys.stderr
 sys.stderr = open(os.devnull, 'w')
@@ -113,7 +114,8 @@ def create_sparse_weights(epsilon, n_rows, n_cols):
 
     weights[mask_weights >= prob] = np.random.uniform(-limit, limit, n_params)
 
-    log.info(f"Create sparse matrix with {weights.getnnz()} connections and {(weights.getnnz() / (n_rows * n_cols)) * 100} % density level")
+    log.info(
+        f"Create sparse matrix with {weights.getnnz()} connections and {(weights.getnnz() / (n_rows * n_cols)) * 100} % density level")
 
     weights = weights.tocsr()
     return weights
@@ -274,7 +276,7 @@ class SET_MLP:
         self.b[index] += self.pdd[index] - self.weight_decay * self.b[index]
 
     def fit(self, x, y_true, x_test, y_test, loss, epochs, batch_size, learning_rate=1e-3, momentum=0.9,
-            weight_decay=0.0002, zeta=0.3, dropoutrate=0., testing=True, save_filename="", monitor=False,
+            weight_decay=0.0002, zeta=0.3, dropout_rate=0., testing=True, save_filename="", monitor=False,
             dropout=False, run_id=-1):
         """
         :param x: (array) Containing parameters
@@ -290,7 +292,7 @@ class SET_MLP:
         self.momentum = momentum
         self.weight_decay = weight_decay
         self.zeta = zeta
-        self.dropout_rate = dropoutrate
+        self.dropout_rate = dropout_rate
         self.save_filename = save_filename
 
         maximum_accuracy = 0
@@ -324,8 +326,8 @@ class SET_MLP:
             # this part is useful to understand model performance and can be commented for production settings
             if testing:
                 t3 = datetime.datetime.now()
-                accuracy_test, activations_test = self.predict(x_test, y_test)
-                accuracy_train, activations_train = self.predict(x, y_true)
+                accuracy_test, activations_test = self.predict(x_test, y_test, batch_size=batch_size)
+                accuracy_train, activations_train = self.predict(x, y_true, batch_size=batch_size)
 
                 t4 = datetime.datetime.now()
                 maximum_accuracy = max(maximum_accuracy, accuracy_test)
@@ -338,6 +340,8 @@ class SET_MLP:
 
                 log.info(f"[run_id={run_id}] ----------------")
                 log.info(f"[run_id={run_id}] Training time: {t2 - t1}s")
+                log.info(f"[run_id={run_id}] Loss train: {loss_train}")
+                log.info(f"[run_id={run_id}] Accuracy train: {accuracy_train}")
                 log.info(f"[run_id={run_id}] Testing time: {t4 - t3}s")
                 log.info(f"[run_id={run_id}] Loss test: {loss_test}")
                 log.info(f"[run_id={run_id}] Accuracy test: {accuracy_test}")
@@ -387,7 +391,6 @@ class SET_MLP:
         return coo_matrix((vals_w_new, (rows_w_new, cols_w_new)), (self.dimensions[0], self.dimensions[1])).getnnz(
             axis=1)
 
-
     def vis_feature_selection(self, feature_selection):
         image_dim = (28, 28)
         f_data = np.reshape(feature_selection, image_dim)
@@ -414,14 +417,14 @@ class SET_MLP:
 
         return feature_selection
 
-    def feature_selection_mean(self, sparsity=0.4, weights=None):
+    def feature_selection_mean(self, sparsity=0.4, weights=None) -> ndarray:
         # TODO(Neil): explain why we choose only the first layer
         # the main reason is that this first layer will already have
         # most of the important information in it, given that everything
         # gets backpropageted
 
         if weights is None:
-            weights = self.w[i]
+            weights = self.w[1]
 
         means = np.asarray(np.mean(np.abs(weights), axis=1)).flatten()
         means_sorted = np.sort(means)
@@ -599,28 +602,11 @@ def load_fashion_mnist_data(no_training_samples, no_testing_samples, random_seed
     return x_train, y_train, x_test, y_test
 
 
-'''
-def eval_subset(train, test):
-
-    clf = ExtraTreesClassifier(n_estimators=50, n_jobs=-1)
-    clf.fit(train[0], train[2])
-    DTacc = float(clf.score(test[0], test[2]))
-
-
-    max_iters = 10
-    cnmi = 0.0
-    cacc = 0.0
-
-    # for iter in range(max_iters):
-    #     nmi, acc = unsuper
-'''
-
 if __name__ == "__main__":
-
     sum_training_time = 0
     runs = 10
 
-    index_one = lambda x: np.where(x == 1)
+    print(f"See {__file__}.log for information on epoch performance")
 
     for i in range(runs):
         # load data
@@ -632,9 +618,9 @@ if __name__ == "__main__":
         no_hidden_neurons_layer = 3000
         epsilon = 13  # set the sparsity level
         zeta = 0.3  # in [0..1]. It gives the percentage of unimportant connections which are removed and replaced with random ones after every epoch
-        no_training_epochs = 1  # 400
+        no_training_epochs = 10  # 400
         batch_size = 40
-        dropout_rate = 0.2
+        dropout_rate = 0  # 0.2
         learning_rate = 0.05
         momentum = 0.9
         weight_decay = 0.0002
@@ -650,12 +636,12 @@ if __name__ == "__main__":
         # train SET-MLP
         set_mlp.fit(x_train, y_train, x_test, y_test, loss=CrossEntropy, epochs=no_training_epochs,
                     batch_size=batch_size, learning_rate=learning_rate,
-                    momentum=momentum, weight_decay=weight_decay, zeta=zeta, dropoutrate=dropout_rate, testing=True,
+                    momentum=momentum, weight_decay=weight_decay, zeta=zeta, dropout_rate=dropout_rate, testing=True,
                     save_filename="Pretrained_results/set_mlp_" + str(
                         no_training_samples) + "_training_samples_e" + str(epsilon) + "_rand" + str(i), monitor=True)
 
         step_time = time.time() - start_time
-        log.info("\nTotal training time: ", step_time)
+        log.info(f"\nTotal training time: {step_time}")
         sum_training_time += step_time
 
         # selected_indices = set_mlp.feature_selection()
@@ -665,8 +651,7 @@ if __name__ == "__main__":
         selected_x_test = x_test[:, selected_indices]
 
         # test SET-MLP
-        # TODO(Neil): here we don't actually have to test SET-MLP, but all the other classifiers
-        accuracy, _ = set_mlp.predict(selected_x_test, y_test, batch_size=100)
+        accuracy, _ = set_mlp.predict(x_test, y_test, batch_size=100)
 
-        log.info("\nAccuracy of the last epoch on the testing data: ", accuracy)
+        log.info(f"\nAccuracy of the last epoch on the testing data: {accuracy}")
     log.info(f"Average training time over {runs} runs is {sum_training_time / runs} seconds")
