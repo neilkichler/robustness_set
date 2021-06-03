@@ -52,7 +52,9 @@ from numba import njit, prange
 import matplotlib.pyplot as plt
 import logging
 
-logging.basicConfig(filename=f'{__file__}.log', level=logging.INFO, format='%(asctime)s %(message)s', filemode='w')
+# logging.basicConfig(filename=f'{__file__}.log', level=logging.INFO, format='%(asctime)s %(message)s', filemode='w')
+# Alternatively one can log to stdout:
+logging.basicConfig(stream=sys.stdout, level=logging.INFO, format='%(asctime)s %(message)s', filemode='w')
 log = logging.getLogger()
 # log.setLevel(logging.INFO)
 
@@ -121,6 +123,22 @@ def create_sparse_weights(epsilon, n_rows, n_cols):
     return weights
 
 
+# NOTE(Neil): removing the limit and using a normal distribution gives significantly better results
+def create_sparse_weights_normal_dist(epsilon, n_rows, n_cols):
+    mask_weights = np.random.rand(n_rows, n_cols)
+    prob = 1 - (epsilon * (n_rows + n_cols)) / (n_rows * n_cols)  # normal to have 8x connections
+
+    # generate an Erdos Renyi sparse weights mask
+    weights = lil_matrix((n_rows, n_cols))
+    n_params = np.count_nonzero(mask_weights[mask_weights >= prob])
+    weights[mask_weights >= prob] = np.float64(np.random.randn(n_params) / 10)
+    log.info(
+        f"Create sparse matrix with {weights.getnnz()} connections and {(weights.getnnz() / (n_rows * n_cols)) * 100} % density level")
+
+    weights = weights.tocsr()
+    return weights
+
+
 def array_intersect(a, b):
     # this are for array intersection
     n_rows, n_cols = a.shape
@@ -129,7 +147,7 @@ def array_intersect(a, b):
 
 
 class SET_MLP:
-    def __init__(self, dimensions, activations, epsilon=20):
+    def __init__(self, dimensions, activations, epsilon=20, init_network='uniform'):
         """
         :param dimensions: (tpl/ list) Dimensions of the neural net. (input, hidden layer, output)
         :param activations: (tpl/ list) Activations functions.
@@ -173,9 +191,16 @@ class SET_MLP:
 
         # Activations are also initiated by index. For the example we will have activations[2] and activations[3]
         self.activations = {}
-        for i in range(len(dimensions) - 1):
-            self.w[i + 1] = create_sparse_weights(self.epsilon, dimensions[i],
-                                                  dimensions[i + 1])  # create sparse weight matrices
+
+        if init_network == 'uniform':
+            create_network = create_sparse_weights
+        elif init_network == 'normal':
+            create_network = create_sparse_weights_normal_dist
+        else:
+            raise ValueError("Unknown initialization method. Supports uniform and normal distribution")
+
+        for i in range(len(dimensions) - 1):  # create sparse weight matrices
+            self.w[i + 1] = create_network(self.epsilon, dimensions[i], dimensions[i + 1])
             self.b[i + 1] = np.zeros(dimensions[i + 1], dtype='float32')
             self.activations[i + 2] = activations[i]
 
@@ -185,6 +210,7 @@ class SET_MLP:
         :param x: (array) Batch of input data vectors.
         :return: (tpl) Node outputs and activations per layer. The numbering of the output is equivalent to the layer numbers.
         """
+
         # w(x) + b
         z = {}
 
@@ -227,6 +253,7 @@ class SET_MLP:
         # delta output layer
         delta = self.loss.delta(y_true, a[self.n_layers])
         dw = coo_matrix(self.w[self.n_layers - 1], dtype='float32')
+
         # compute backpropagation updates
         backpropagation_updates_numpy(a[self.n_layers - 1], delta, dw.row, dw.col, dw.data)
 
@@ -238,12 +265,11 @@ class SET_MLP:
         # Determine partial derivative and delta for the rest of the layers.
         # Each iteration requires the delta from the previous layer, propagating backwards.
         for i in reversed(range(2, self.n_layers)):
-            # dropout for the backpropagation step
-            if keep_prob != 1:
+            if keep_prob != 1:  # dropout for the backpropagation step
                 delta = (delta @ self.w[i].transpose()) * self.activations[i].prime(z[i])
                 delta = delta * masks[i]
                 delta /= keep_prob
-            else:
+            else:  # normal update
                 delta = (delta @ self.w[i].transpose()) * self.activations[i].prime(z[i])
 
             dw = coo_matrix(self.w[i - 1], dtype='float32')
@@ -252,6 +278,7 @@ class SET_MLP:
             backpropagation_updates_numpy(a[i - 1], delta, dw.row, dw.col, dw.data)
 
             update_params[i - 1] = (dw.tocsr(), np.mean(delta, axis=0))
+
         for k, v in update_params.items():
             self._update_w_b(k, v[0], v[1])
 
@@ -604,7 +631,7 @@ def load_fashion_mnist_data(no_training_samples, no_testing_samples, random_seed
 
 if __name__ == "__main__":
     sum_training_time = 0
-    runs = 10
+    runs = 1
 
     print(f"See {__file__}.log for information on epoch performance")
 

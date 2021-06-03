@@ -1,23 +1,19 @@
-import os
 import copy
-import pickle
-import time
 import datetime
 import logging
-
-import numpy as np
-from sklearn.ensemble import ExtraTreesClassifier
-from sklearn.svm import SVC
-from sklearn.neighbors import KNeighborsClassifier
-
-from set_mlp import SET_MLP, Relu, Softmax, load_fashion_mnist_data, CrossEntropy
-
+import os
+import pickle
 from multiprocessing import Pool
 
-from utils.monitor import Monitor
-import psutil
-
 import matplotlib.pyplot as plt
+import numpy as np
+import psutil
+from sklearn.ensemble import ExtraTreesClassifier
+from sklearn.neighbors import KNeighborsClassifier
+from sklearn.svm import SVC
+
+from set_mlp import SET_MLP, Relu, Softmax, load_fashion_mnist_data, CrossEntropy
+from utils.monitor import Monitor
 
 FOLDER = "benchmarks"
 

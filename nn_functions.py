@@ -1,6 +1,8 @@
 import numpy as np
+from numba import njit
 
 # Contains different activation functions and losses to train your set mlp model
+
 
 class Relu:
     @staticmethod
@@ -16,11 +18,14 @@ class Relu:
 
 
 class Sigmoid:
+
     @staticmethod
+    @njit(fastmath=True, cache=True)
     def activation(z):
         return 1 / (1 + np.exp(-z))
 
     @staticmethod
+    @njit(fastmath=True, cache=True)
     def prime(z):
         return Sigmoid.activation(z) * (1 - Sigmoid.activation(z))
 
