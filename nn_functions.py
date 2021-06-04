@@ -1,5 +1,5 @@
 import numpy as np
-from numba import njit
+from sklearn.metrics import log_loss
 
 # Contains different activation functions and losses to train your set mlp model
 
@@ -17,15 +17,23 @@ class Relu:
         return z
 
 
+class Tanh:
+    @staticmethod
+    def activation(z):
+        return np.tanh(z)
+
+    @staticmethod
+    def prime(z):
+        return 1 - Tanh.activation(z) ** 2
+
+
 class Sigmoid:
 
     @staticmethod
-    @njit(fastmath=True, cache=True)
     def activation(z):
         return 1 / (1 + np.exp(-z))
 
     @staticmethod
-    @njit(fastmath=True, cache=True)
     def prime(z):
         return Sigmoid.activation(z) * (1 - Sigmoid.activation(z))
 
@@ -43,7 +51,7 @@ class Softmax:
 
 class CrossEntropy:
     """
-    Used with Softmax activation in final layer
+    Used with Softmax (multi-class) or Sigmoid (binary classification) activation in final layer
     """
 
     def delta(self, y_true, y_pred):
@@ -55,15 +63,7 @@ class CrossEntropy:
 
     @staticmethod
     def loss(y_true, y):
-        """
-        https://datascience.stackexchange.com/questions/9302/the-cross-entropy-error-function-in-neural-networks
-        :param y_true: (array) One hot encoded truth vector.
-        :param y: (array) Prediction vector
-        :return: (flt)
-        """
-        y /= y.sum(axis=-1, keepdims=True)
-        output = np.clip(y, 1e-7, 1 - 1e-7)
-        return np.sum(y_true * - np.log(output), axis=-1).sum() / y.shape[0]
+        return log_loss(y_true, y)
 
 
 class MSE:

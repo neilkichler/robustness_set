@@ -596,7 +596,7 @@ class SET_MLP:
         :return: (flt) Classification accuracy
         :return: (array) A 2D array of shape (n_cases, n_classes).
         """
-        activations = np.zeros((y_test.shape[0], y_test.shape[1]))
+        activations = np.zeros(y_test.shape)
         for j in range(x_test.shape[0] // batch_size):
             k = j * batch_size
             l = (j + 1) * batch_size

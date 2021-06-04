@@ -11,42 +11,52 @@ import scipy.io as sio
 from numpy.core.multiarray import ndarray
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import OneHotEncoder, StandardScaler
+from sklearn.neural_network import MLPClassifier
+from sklearn.ensemble import ExtraTreesClassifier
 
-from nn_functions import Relu, Sigmoid, MSE
+from nn_functions import Relu, Sigmoid, CrossEntropy, Tanh, MSE
+
 from set_mlp import SET_MLP
 
-DATA_PATH = 'data/'
+DATA_PATH = './data/'
+PATH = "MADELON/"
+FULL_PATH = DATA_PATH + PATH
+
 FILE_NAME = 'lung.mat'
 FOLDER = "benchmarks"
 
 TEST_SIZE = 1 / 3
 
+# TODO(Neil): Most of this can be combined with lung_classification as it is almost the same
 
-def load_lung_data() -> (ndarray, ndarray):
-    """
-    The lung.mat data set is from: https://jundongl.github.io/scikit-feature/datasets.html
 
-    Dataset characteristics:
+def save_madelon_npz() -> (ndarray, ndarray):
+    train_data_path = FULL_PATH + 'madelon_train.data'
+    train_resp_path = FULL_PATH + 'madelon_train.labels'
+    val_data_path = FULL_PATH + 'madelon_valid.data'
+    val_resp_path = FULL_PATH + 'madelon_valid.labels'
+    X_train = np.loadtxt(train_data_path)
+    y_train = np.loadtxt(train_resp_path)
+    X_test = np.loadtxt(val_data_path)
+    y_test = np.loadtxt(val_resp_path)
 
-    # sample: 203
-    # features: 3312
-    # output classes: 5
+    X = np.concatenate((X_train, X_test), axis=0)
+    y = np.concatenate((y_train, y_test), axis=0)
 
-    To expect: high variance
+    np.savez_compressed(FULL_PATH + "madelon", X=X, y=y.reshape(len(y), 1))
 
-    """
-    lung_data = sio.loadmat(DATA_PATH + FILE_NAME)
+    return X, y
 
-    X_: ndarray = lung_data['X']
-    y_: ndarray = lung_data['Y']
 
-    enc = OneHotEncoder().fit(y_)
-    y_ = enc.transform(y_).astype('uint8').toarray()
+def load_madelon_npz():
+    data = np.load(FULL_PATH + "madelon.npz")
 
-    logging.info("Available output categories:")
-    logging.info(enc.categories_)
+    X = data['X']
+    y = data['y']
+    enc = OneHotEncoder().fit(y)
+    y = enc.transform(y).astype('uint8').toarray()
 
-    return X_, y_
+    return X, y
 
 
 def train_test_split_normalize(X_: ndarray, y_: ndarray, test_size=TEST_SIZE, random_state=42) \
@@ -60,7 +70,7 @@ def train_test_split_normalize(X_: ndarray, y_: ndarray, test_size=TEST_SIZE, ra
     return X_train_, X_test_, y_train_, y_test_
 
 
-def lung_single_run(X_train_, X_test_, y_train_, y_test_, set_params_, run_id=0):
+def madelon_single_run(X_train_, X_test_, y_train_, y_test_, set_params_, run_id=0):
     n_hidden_neurons_layer = set_params_['n_hidden_neurons_layer']
     epochs = set_params_['epochs']
     epsilon = set_params_['epsilon']
@@ -73,11 +83,17 @@ def lung_single_run(X_train_, X_test_, y_train_, y_test_, set_params_, run_id=0)
 
     start_time = datetime.datetime.now()
 
-    set_mlp = SET_MLP(
-        (X_train_.shape[1], n_hidden_neurons_layer, n_hidden_neurons_layer, n_hidden_neurons_layer, y_train_.shape[1]),
-        (Relu, Relu, Relu, Sigmoid), epsilon=epsilon, init_network='normal')
+    # clf = MLPClassifier(random_state=1, max_iter=300).fit(X_train_, y_train_)
+    # clf = ExtraTreesClassifier()
+    # clf.fit(X_train_, y_train_)
+    # score = clf.score(X_test_, y_test_)
+    # print(f"SCORE: {score}")
 
-    set_metrics = set_mlp.fit(X_train_, y_train_, X_test_, y_test_, loss=MSE, epochs=epochs, zeta=zeta,
+    set_mlp = SET_MLP(
+        (X_train_.shape[1], n_hidden_neurons_layer, y_train_.shape[1]),
+        (Sigmoid, Tanh), epsilon=epsilon, init_network='normal')
+
+    set_metrics = set_mlp.fit(X_train_, y_train_, X_test_, y_test_, loss=CrossEntropy, epochs=epochs, zeta=zeta,
                               batch_size=batch_size,
                               dropout_rate=dropout_rate, learning_rate=learning_rate, momentum=momentum,
                               weight_decay=weight_decay,
@@ -86,13 +102,13 @@ def lung_single_run(X_train_, X_test_, y_train_, y_test_, set_params_, run_id=0)
     dt = datetime.datetime.now() - start_time
     evolved_weights = set_mlp.weights_evolution
 
-    run_result = {'run_id': run_id, 'set_params': copy.deepcopy(set_params_), 'set_metrics': set_metrics,
+    run_result = {'run_id': run_id, 'set_params': copy.copy(set_params_), 'set_metrics': set_metrics,
                   'evolved_weights': evolved_weights, 'training_time': dt}
 
     return run_result
 
 
-def lung_density_runs(run_id, set_params, density_levels, n_training_epochs, data, fname="", folder=""):
+def madelon_density_runs(run_id, set_params, density_levels, n_training_epochs, data, fname="", folder=""):
     np.random.seed(run_id)
 
     X_train, X_test, y_train, y_test = data
@@ -108,7 +124,7 @@ def lung_density_runs(run_id, set_params, density_levels, n_training_epochs, dat
         set_params['epsilon'] = epsilon
         set_params['epochs'] = n_training_epochs
 
-        run_result = lung_single_run(X_train, X_test, y_train, y_test, set_params, run_id=run_id)
+        run_result = madelon_single_run(X_train, X_test, y_train, y_test, set_params, run_id=run_id)
 
         results['runs'].append({'set_sparsity': epsilon, 'run': run_result})
 
@@ -118,15 +134,16 @@ def lung_density_runs(run_id, set_params, density_levels, n_training_epochs, dat
             pickle.dump(results, h)
 
 
-def lung_train_set_differnt_densities(runs=10, n_training_epochs=100, set_sparsity_levels=None, use_logical_cores=True,
-                                      folder=''):
-    set_params = {'n_hidden_neurons_layer': 3000,
-                  'epochs': 100,
+def madelon_train_set_differnt_densities(runs=10, n_training_epochs=100, set_sparsity_levels=None,
+                                         use_logical_cores=True,
+                                         folder=''):
+    set_params = {'n_hidden_neurons_layer': 1000,
+                  'epochs': n_training_epochs,
                   'epsilon': 20,  # set the sparsity level
                   'zeta': 0.3,  # in [0..1]. Percentage of unimportant connections to be removed and replaced
-                  'batch_size': 2, 'dropout_rate': 0, 'learning_rate': 0.01, 'momentum': 0.9, 'weight_decay': 0.0002}
+                  'batch_size': 100, 'dropout_rate': 0, 'learning_rate': 0.01, 'momentum': 0.9, 'weight_decay': 0.00002}
 
-    X, y = load_lung_data()
+    X, y = load_madelon_npz()
 
     start_test = datetime.datetime.now()
     n_cores = psutil.cpu_count(logical=use_logical_cores)
@@ -135,7 +152,7 @@ def lung_train_set_differnt_densities(runs=10, n_training_epochs=100, set_sparsi
         for i in range(runs):
             remaining_density_levels = copy.copy(set_sparsity_levels)
             # check if results already exist
-            fname = f"{folder}/set_mlp_density_run_{i}.pickle"
+            fname = f"{folder}/set_mlp_madelon_density_run_{i}.pickle"
             if os.path.isfile(fname):
                 with open(fname, "rb") as h:
                     result = pickle.load(h)
@@ -143,7 +160,7 @@ def lung_train_set_differnt_densities(runs=10, n_training_epochs=100, set_sparsi
                         remaining_density_levels.remove(el['set_sparsity'])
 
             data = train_test_split_normalize(X, y, test_size=TEST_SIZE, random_state=i)
-            futures.append(pool.apply_async(lung_density_runs, (
+            futures.append(pool.apply_async(madelon_density_runs, (
                 i, set_params, remaining_density_levels, n_training_epochs, data, fname, folder)))
 
         for i, future in enumerate(futures):
@@ -158,23 +175,7 @@ def lung_train_set_differnt_densities(runs=10, n_training_epochs=100, set_sparsi
 
 
 def test():
-    run_id = 0
-
-    # SET model parameters
-    set_params = {'n_hidden_neurons_layer': 3000,
-                  'epochs': 5,  # 100,
-                  'epsilon': 20,  # set the sparsity level
-                  'zeta': 0.3,  # in [0..1]. Percentage of unimportant connections to be removed and replaced
-                  'batch_size': 2, 'dropout_rate': 0, 'learning_rate': 0.01, 'momentum': 0.9, 'weight_decay': 0.0002}
-
-    X, y = load_lung_data()
-
-    X_train, X_test, y_train, y_test = train_test_split_normalize(X, y, test_size=TEST_SIZE, random_state=run_id)
-
-    feature_selection = lung_single_run(X_train, X_test, y_train, y_test, set_params)
-
-    X_train = X_train[:, feature_selection]
-    X_test = X_test[:, feature_selection]
+    save_madelon_npz()
 
 
 if __name__ == '__main__':
@@ -182,16 +183,16 @@ if __name__ == '__main__':
     if not os.path.exists(FOLDER):
         os.makedirs(FOLDER)
 
-    sub_folder = "benchmark_lung"
+    sub_folder = "benchmark_madelon"
     date_format = "%d_%m_%Y_%H_%M_%S"
     FOLDER = f"{FOLDER}/{sub_folder}_{datetime.datetime.now().strftime(date_format)}"
     os.makedirs(FOLDER)
 
     runs = 32
     n_training_epochs = 100
-    set_sparsity_levels = [1, 2, 3, 4, 5, 6, 13, 32]  # , 512, 1024]
+    set_sparsity_levels = [1, 2, 3, 4, 5, 6, 13, 32, 64, 128, 256]
 
     logical_cores = False
 
-    lung_train_set_differnt_densities(runs, n_training_epochs, set_sparsity_levels, use_logical_cores=logical_cores,
-                                      folder=FOLDER)
+    madelon_train_set_differnt_densities(runs, n_training_epochs, set_sparsity_levels, use_logical_cores=logical_cores,
+                                         folder=FOLDER)
