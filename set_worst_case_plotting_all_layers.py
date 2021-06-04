@@ -6,7 +6,8 @@ import numpy as np
 import matplotlib.pyplot as plt
 from mpl_toolkits.axes_grid1 import AxesGrid
 
-from utils_plotting import current_method_name, feature_selection_mean
+from utils_plotting import current_method_name
+from feature_selection import feature_selection_mean
 
 FOLDER = "benchmarks"
 FOLDER_NEW = ""
