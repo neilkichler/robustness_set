@@ -102,8 +102,17 @@ def madelon_single_run(X_train_, X_test_, y_train_, y_test_, set_params_, run_id
     dt = datetime.datetime.now() - start_time
     evolved_weights = set_mlp.weights_evolution
 
-    run_result = {'run_id': run_id, 'set_params': copy.copy(set_params_), 'set_metrics': set_metrics,
-                  'evolved_weights': evolved_weights, 'training_time': dt}
+    sample_epochs = [0, 5, 10, 20, 30, 40, 50, 75, 100, 200, 300, 399]
+
+    sample_weights = []
+    sample_set_metrics = []
+    for sample_epoch in sample_epochs:
+        sample_weights.append(evolved_weights[sample_epoch])
+        sample_set_metrics.append(set_metrics[sample_epoch])
+
+    run_result = {'run_id': run_id, 'set_params': copy.copy(set_params_),
+            'set_metrics': sample_set_metrics,
+                  'evolved_weights': sample_weights, 'training_time': dt}
 
     return run_result
 
@@ -189,7 +198,7 @@ if __name__ == '__main__':
     os.makedirs(FOLDER)
 
     runs = 32
-    n_training_epochs = 100
+    n_training_epochs = 400
     set_sparsity_levels = [1, 2, 3, 4, 5, 6, 13, 32, 64, 128, 256]
 
     logical_cores = False
