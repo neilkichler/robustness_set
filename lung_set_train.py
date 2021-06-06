@@ -15,6 +15,7 @@ from lung_data import load_lung_data, train_test_split_normalize
 
 
 FOLDER = "benchmarks"
+TEST_SIZE = 1/3
 
 
 def lung_single_run(X_train_, X_test_, y_train_, y_test_, set_params_, run_id=0):

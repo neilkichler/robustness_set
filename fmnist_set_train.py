@@ -4,6 +4,7 @@ import logging
 import os
 import pickle
 from multiprocessing import Pool
+import bz2
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -12,8 +13,11 @@ from sklearn.ensemble import ExtraTreesClassifier
 from sklearn.neighbors import KNeighborsClassifier
 from sklearn.svm import SVC
 
-from set_mlp import SET_MLP, Relu, Softmax, load_fashion_mnist_data, CrossEntropy
+from fmnist_data import load_fashion_mnist_data
+from set_mlp import SET_MLP, Relu, Softmax , CrossEntropy
 from utils.monitor import Monitor
+
+from train_utils import sample_weights_and_metrics
 
 FOLDER = "benchmarks"
 
@@ -32,7 +36,8 @@ def index_one(x):
     return np.where(x == 1)
 
 
-def single_run_density(run_id, set_params, density_levels, n_training_epochs, fname=""):
+def single_run_density(run_id, set_params, density_levels, n_training_epochs,
+                       fname="", save_compressed=True):
     """
     the density levels are the set epsilon sparsity levels
     """
@@ -80,8 +85,10 @@ def single_run_density(run_id, set_params, density_levels, n_training_epochs, fn
 
         dt = datetime.datetime.now() - start_time
 
-        # After every epoch we store all weight layers to do feature selection and topology comparison
-        evolved_weights = set_mlp.weights_evolution
+        sample_epochs = [0, 5, 10, 20, 30, 40, 50, 75, 100, 150, 199]
+        print("HELLO")
+        print(len(set_mlp.weights_evolution))
+        evolved_weights, set_metrics = sample_weights_and_metrics(set_mlp.weights_evolution, set_metrics, sample_epochs)
 
         run_result = {'run_id': run_id, 'set_params': copy.deepcopy(set_params), 'set_metrics': set_metrics,
                       'evolved_weights': evolved_weights, 'training_time': dt}
@@ -90,8 +97,12 @@ def single_run_density(run_id, set_params, density_levels, n_training_epochs, fn
 
         fname = f"{FOLDER}/set_mlp_density_run_{run_id}.pickle"
         # save preliminary results
-        with open(fname, "wb") as h:
-            pickle.dump(results, h)
+        if save_compressed:
+            with bz2.BZ2File(f"{fname}.pbz2", "w") as h:
+                pickle.dump(results, h)
+        else:
+            with open(fname, "wb") as h:
+                pickle.dump(results, h)
 
 
 def single_run(run_id, set_params, models, sample_epochs,
@@ -159,8 +170,14 @@ def single_run(run_id, set_params, models, sample_epochs,
     # TODO(Neil): hardcoded path
 
     fname = f"benchmarks/benchmark_22_05_2021_13_59_10/set_mlp_run_{run_id}.pickle"
-    with open(fname, "rb") as h:
-        set_pretrained = pickle.load(h)
+    if os.path.isfile(fname):
+        try:
+            with open(fname, "rb") as h:
+                set_pretrained = pickle.load(h)
+        except EOFError:
+            return
+    else:
+        return
 
     evolved_weights = set_pretrained['evolved_weights']
     n_evolutions = len(evolved_weights)
@@ -347,21 +364,17 @@ def fmnist_train_set_differnt_densities(runs=10, n_training_epochs=100, set_spar
     with Pool(processes=n_cores) as pool:
         futures = []
         for i in range(runs):
-            remaining_density_levels = copy.copy(set_sparsity_levels)
-            # check if results already exist
             fname = f"{FOLDER}/set_mlp_density_run_{i}.pickle"
-            if os.path.isfile(fname):
-                with open(fname, "rb") as h:
-                    result = pickle.load(h)
-                    # try:
-                    #     result = pickle.load(h)
-                    # except EOFError:
-                    #     print("Invalid file, creating a new one for this run")
-                    #     pickle.dump([], h)
-                    for el in result['runs']:
-                        remaining_density_levels.remove(el['set_sparsity'])
 
-            futures.append(pool.apply_async(single_run_density, (i, set_params, remaining_density_levels, n_training_epochs, fname)))
+            # check if results already exist
+            # if os.path.isfile(fname):
+            #     with open(fname, "rb") as h:
+            #         result = pickle.load(h)
+            #         for el in result['runs']:
+            #             remaining_density_levels.remove(el['set_sparsity'])
+
+            futures.append(pool.apply_async(single_run_density, (i, set_params,
+                set_sparsity_levels, n_training_epochs, fname)))
 
         for i, future in enumerate(futures):
             print(f'[run={i}] Starting job')
@@ -392,7 +405,7 @@ if __name__ == "__main__":
     test_density = True
 
     if test_density:
-        runs = 32
+        runs = 4
         n_training_epochs = 200
         set_sparsity_levels = [1, 2, 3, 4, 5, 6, 13, 32, 64, 128, 256] # , 512, 1024]
         # the levels are chosen to have [0.16, 0.5, 1, 2, 5, 10, 20, 40, 80, 100] % density in the first layer
@@ -419,7 +432,7 @@ if __name__ == "__main__":
 
         else:
             # all have dimensions (runs, models, n_sparseness_levels)
-            runs = 50
+            runs = 32
             n_training_epochs = 400
 
             sample_epochs = [0, 5, 10, 20, 30, 40, 50, 75, 100, 150, 200, 300, 399]
@@ -428,7 +441,7 @@ if __name__ == "__main__":
                                  0.975, 0.99, 0.995, 0.999]
 
             use_logical_cores = True
-            use_pretrained = False
+            use_pretrained = True
 
             benchmark = test_fmnist(runs=runs, sample_epochs=sample_epochs, n_training_epochs=n_training_epochs,
                                     sparseness_levels=sparseness_levels,
