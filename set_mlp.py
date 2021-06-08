@@ -144,7 +144,8 @@ def array_intersect(a, b):
     # this are for array intersection
     n_rows, n_cols = a.shape
     dtype = {'names': ['f{}'.format(i) for i in range(n_cols)], 'formats': n_cols * [a.dtype]}
-    return np.in1d(a.view(dtype), b.view(dtype), assume_unique=True)  # boolean return
+    # TODO(Neil): not sure if we can asume uniqueness here
+    return np.in1d(a.view(dtype), b.view(dtype))  # boolean return
 
 
 class SET_MLP:

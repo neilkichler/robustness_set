@@ -1,34 +1,35 @@
-import re
+import argparse
 import os
 import pickle
-import inspect
-import psutil
 from multiprocessing import Pool
 
-from scipy.sparse import save_npz, load_npz
+import matplotlib.pyplot as plt
+import numpy as np
+import psutil
+from mpl_toolkits.axes_grid1 import AxesGrid
+from scipy.sparse import save_npz
 
 from utils_plotting import current_method_name, get_model_names
-import matplotlib.pyplot as plt
-from mpl_toolkits.axes_grid1 import AxesGrid
 
-import numpy as np
-
+# NOTE(Neil): To quickly use a specific data folder change this variable
+DEFAULT_FOLDER = "benchmark_23_05_2021_13_38_50"
 FOLDER = "RobustnessResults/new_result"
 BENCHMARK_FOLDER = "benchmarks/"
+BENCHMARK_PREFIX = "benchmark_"
+BENCHMARK_RUN_PREFIX = "fmnist_"
 TOPOLOGY_FOLDER = "topo/"
-EXTENSION = ".png"
 DPI = 300
+
 
 def clear_console():
     cmd = 'clear'
-    if os.name in ('nt', 'dos'): # Windows detected
+    if os.name in ('nt', 'dos'):  # Windows detected
         cmd = 'cls'
     os.system(cmd)
 
+
 def plot_sparsity_vs_accuracy_single(data, save_plot=False, show_plot=False):
-
     fig = plt.figure()
-
 
     sparseness_levels = np.array(data['sparseness_levels'])
     n_sparseness_level = len(sparseness_levels)
@@ -41,8 +42,8 @@ def plot_sparsity_vs_accuracy_single(data, save_plot=False, show_plot=False):
 
     # This assumes that the runs are normally distributed!
     # For n > 30 or more we should be fine
-    #last_epoch = -1
-    #scores = scores[:, last_epoch, :]
+    # last_epoch = -1
+    # scores = scores[:, last_epoch, :]
     means = np.mean(scores, axis=0)
     std = np.std(scores, axis=0)
 
@@ -58,7 +59,7 @@ def plot_sparsity_vs_accuracy_single(data, save_plot=False, show_plot=False):
         color = colors[i]
         plt.fill_between(sparseness_levels_percent, (m_means - m_std) * percent,
                          (m_means + m_std) * percent, alpha=0.1,
-                             color=color)
+                         color=color)
 
         plt.plot(sparseness_levels_percent, m_means * percent, color=color, label=model)
 
@@ -70,15 +71,14 @@ def plot_sparsity_vs_accuracy_single(data, save_plot=False, show_plot=False):
     # TODO(Neil): Saving the plot is duplicated across the functions. Maybe make a master_function to do this for us
     #             maybe even with a decorator?
     if save_plot:
-        fig.savefig(f"{FOLDER}/{current_method_name()}{EXTENSION}", bbox_inches='tight')
+        fig.savefig(f"{FOLDER}/{current_method_name()}.png", bbox_inches='tight')
+        fig.savefig(f"{FOLDER}/{current_method_name()}.pdf", bbox_inches='tight')
 
     if show_plot:
         plt.show()
 
 
-
 def plot_sparsity_vs_accuracy_all_runs(data, save_plot=False, show_plot=False):
-
     fig = plt.figure()
 
     sparseness_levels = np.array(data[0]['sparseness_levels'])
@@ -95,7 +95,7 @@ def plot_sparsity_vs_accuracy_all_runs(data, save_plot=False, show_plot=False):
 
     # This assumes that the runs are normally distributed!
     # For n > 30 or more we should be fine
-    #scores = scores[:, last_epoch, :]
+    # scores = scores[:, last_epoch, :]
     means = np.mean(scores, axis=0)
     std = np.std(scores, axis=0)
 
@@ -111,7 +111,7 @@ def plot_sparsity_vs_accuracy_all_runs(data, save_plot=False, show_plot=False):
         color = colors[i]
         plt.fill_between(sparseness_levels_percent, (m_means - m_std) * percent,
                          (m_means + m_std) * percent, alpha=0.1,
-                             color=color)
+                         color=color)
 
         plt.plot(sparseness_levels_percent, m_means * percent, color=color, label=model)
         plt.scatter(sparseness_levels_percent, m_means * percent, color=color)
@@ -124,15 +124,14 @@ def plot_sparsity_vs_accuracy_all_runs(data, save_plot=False, show_plot=False):
     # TODO(Neil): Saving the plot is duplicated across the functions. Maybe make a master_function to do this for us
     #             maybe even with a decorator?
     if save_plot:
-        fig.savefig(f"{FOLDER}/{current_method_name()}{EXTENSION}", bbox_inches='tight', dpi=DPI)
+        fig.savefig(f"{FOLDER}/{current_method_name()}.png", bbox_inches='tight', dpi=DPI)
+        fig.savefig(f"{FOLDER}/{current_method_name()}.pdf", bbox_inches='tight', dpi=DPI)
 
     if show_plot:
         plt.show()
 
 
-
 def plot_sparsity_vs_accuracy(data, save_plot=False, show_plot=False):
-
     fig = plt.figure()
 
     info = data['info']
@@ -149,8 +148,8 @@ def plot_sparsity_vs_accuracy(data, save_plot=False, show_plot=False):
 
     # This assumes that the runs are normally distributed!
     # For n > 30 or more we should be fine
-    #last_epoch = -1
-    #scores = scores[:, last_epoch, :]
+    # last_epoch = -1
+    # scores = scores[:, last_epoch, :]
     means = np.mean(scores, axis=0)
     std = np.std(scores, axis=0)
 
@@ -166,7 +165,7 @@ def plot_sparsity_vs_accuracy(data, save_plot=False, show_plot=False):
         color = colors[i]
         plt.fill_between(sparseness_levels_percent, (m_means - m_std) * percent,
                          (m_means + m_std) * percent, alpha=0.1,
-                             color=color)
+                         color=color)
 
         plt.plot(sparseness_levels_percent, m_means * percent, color=color, label=model)
 
@@ -178,13 +177,14 @@ def plot_sparsity_vs_accuracy(data, save_plot=False, show_plot=False):
     # TODO(Neil): Saving the plot is duplicated across the functions. Maybe make a master_function to do this for us
     #             maybe even with a decorator?
     if save_plot:
-        fig.savefig(f"{FOLDER}/{current_method_name()}{EXTENSION}", bbox_inches='tight')
+        fig.savefig(f"{FOLDER}/{current_method_name()}.png", bbox_inches='tight')
+        fig.savefig(f"{FOLDER}/{current_method_name()}.pdf", bbox_inches='tight')
 
     if show_plot:
         plt.show()
 
-def plot_sparsity_vs_time_all_runs(data, save_plot=False, show_plot=False):
 
+def plot_sparsity_vs_time_all_runs(data, save_plot=False, show_plot=False):
     fig = plt.figure()
 
     # TODO(Neil): Time is actually in micro not milliseconds. Divide by another 1000!
@@ -200,7 +200,6 @@ def plot_sparsity_vs_time_all_runs(data, save_plot=False, show_plot=False):
 
     # score0 = scores[0]
     model_names = get_model_names(data[-1])
-
 
     sparseness_levels_percent = sparseness_levels * percent
     means = np.mean(times, axis=0)
@@ -226,14 +225,14 @@ def plot_sparsity_vs_time_all_runs(data, save_plot=False, show_plot=False):
     plt.legend()
 
     if save_plot:
-        fig.savefig(f"{FOLDER}/{current_method_name()}{EXTENSION}", bbox_inches='tight', dpi=DPI)
+        fig.savefig(f"{FOLDER}/{current_method_name()}.png", bbox_inches='tight', dpi=DPI)
+        fig.savefig(f"{FOLDER}/{current_method_name()}.pdf", bbox_inches='tight', dpi=DPI)
 
     if show_plot:
         plt.show()
 
 
 def plot_sparsity_vs_time(data, save_plot=False, show_plot=False):
-
     fig = plt.figure()
 
     info = data['info']
@@ -271,7 +270,8 @@ def plot_sparsity_vs_time(data, save_plot=False, show_plot=False):
     plt.legend()
 
     if save_plot:
-        fig.savefig(f"{FOLDER}/{current_method_name()}{EXTENSION}", bbox_inches='tight')
+        fig.savefig(f"{FOLDER}/{current_method_name()}.png", bbox_inches='tight')
+        fig.savefig(f"{FOLDER}/{current_method_name()}.pdf", bbox_inches='tight')
 
     if show_plot:
         plt.show()
@@ -305,7 +305,6 @@ def plot_feature_selection_single_instance(data):
         plt.show()
 
 
-
 def plot_epoch_vs_accuracy_all_runs(data, save_plot=False, show_plot=False):
     percent = 100
 
@@ -330,7 +329,6 @@ def plot_epoch_vs_accuracy_all_runs(data, save_plot=False, show_plot=False):
             means = np.mean(scores, axis=0)
             std = np.std(scores, axis=0)
 
-
             m_means = means[0:10, i]
             m_std = std[0:10, i]
 
@@ -341,10 +339,10 @@ def plot_epoch_vs_accuracy_all_runs(data, save_plot=False, show_plot=False):
             yerr_low = (m_means - m_std)
             yerr_high = (m_means + m_std)
             plt.errorbar(sparseness_levels_percent[0:10], m_means * percent,
-                         yerr=[yerr_low, yerr_high], #color=color,
-                         fmt='--o', # alpha=0.1*(j + 1),
+                         yerr=[yerr_low, yerr_high],  # color=color,
+                         fmt='--o',  # alpha=0.1*(j + 1),
                          label=str(sample_epochs[j]))
-                         # , alpha=0.1, color=color, fmt='o')
+            # , alpha=0.1, color=color, fmt='o')
 
         plt.title(f"{model}: Sparsity vs Accuracy (per epoch)")
         plt.xlabel("Sparsity [%]")
@@ -352,7 +350,8 @@ def plot_epoch_vs_accuracy_all_runs(data, save_plot=False, show_plot=False):
         plt.legend()
 
         if save_plot:
-            fig.savefig(f"{FOLDER}/{model}_{current_method_name()}{EXTENSION}", bbox_inches='tight', dpi=300)
+            fig.savefig(f"{FOLDER}/{model}_{current_method_name()}.pdf", bbox_inches='tight', dpi=300)
+            fig.savefig(f"{FOLDER}/{model}_{current_method_name()}.png", bbox_inches='tight', dpi=300)
 
         if show_plot:
             plt.show()
@@ -362,13 +361,12 @@ def plot_feature_selection_aggregate_per_epoch(data, title=False, show_plot=Fals
     percent = 100
     image_dim = (28, 28)
 
-
     sample_epochs = data[0]['sample_epochs']
 
     sparseness_levels = data[0]['sparseness_levels']
     sparseness_level = sparseness_levels.index(0.7)
 
-    fig = plt.figure(dpi=300.0)
+    fig = plt.figure(dpi=300)
 
     sparseness_levels = data[0]['sparseness_levels']
     selected_sparseness_idx = [1, 2, 3, 4, 5, 6, 7, 8, 10]
@@ -397,11 +395,9 @@ def plot_feature_selection_aggregate_per_epoch(data, title=False, show_plot=Fals
 
         grid[i].set_title(f"Epoch: {sample_epochs[i]}")
 
-
     cbar = grid.cbar_axes[0].colorbar(im)
 
-
-    cbar.set_label_text("prevalence") # of features")
+    cbar.set_label_text("prevalence")  # of features")
 
     for cax in grid.cbar_axes:
         cax.toggle_label(True)
@@ -411,18 +407,14 @@ def plot_feature_selection_aggregate_per_epoch(data, title=False, show_plot=Fals
     grid.axes_llc.set_yticks([])
 
     if save_plot:
-        fig.savefig(f"{FOLDER}/{current_method_name()}{EXTENSION}", bbox_inches='tight', dpi=DPI)
+        fig.savefig(f"{FOLDER}/{current_method_name()}.png", bbox_inches='tight', dpi=DPI)
+        fig.savefig(f"{FOLDER}/{current_method_name()}.pdf", bbox_inches='tight', dpi=DPI)
 
     if show_plot:
         plt.show()
 
 
-
-
-
-
 def plot_feature_selection_per_epoch(data):
-
     percent = 100
     image_dim = (28, 28)
     features = data['selected_features']
@@ -445,11 +437,7 @@ def plot_feature_selection_per_epoch(data):
     plt.show()
 
 
-
-
-
 def plot_feature_selection_per_run(data):
-
     percent = 100
     image_dim = (28, 28)
     features = data['selected_features']
@@ -473,7 +461,7 @@ def plot_feature_selection_per_run(data):
         f_data = np.reshape(f[idx], image_dim)
         current_ax = a  # x[i, j]
         current_ax.imshow(f_data, vmin=0, vmax=1, cmap="gray_r", interpolation=None)
-        current_ax.set_title(f"Sparse: {int(s*percent)} %")
+        current_ax.set_title(f"Sparse: {int(s * percent)} %")
         # current_ax.set_xlabel("12")
 
     # plt.tight_layout(pad=0.4, w_pad=0.3, h_pad=0.3)
@@ -481,10 +469,11 @@ def plot_feature_selection_per_run(data):
     plt.show()
 
 
-def plot_feature_selection_aggregate_separate_runs(data, title=False, show_plot=False, show_cbar=False, save_plot=False):
+def plot_feature_selection_aggregate_separate_runs(data, title=False, show_plot=False, show_cbar=False,
+                                                   save_plot=False):
     percent = 100
     image_dim = (28, 28)
-    fig = plt.figure(dpi=300.0)
+    fig = plt.figure(dpi=300)
 
     sparseness_levels = data[0]['sparseness_levels']
     selected_sparseness_idx = [1, 2, 3, 4, 5, 6, 7, 8, 10]
@@ -517,9 +506,7 @@ def plot_feature_selection_aggregate_separate_runs(data, title=False, show_plot=
 
     # plt.colorbar(im, cax = grid.cbar_axes[0])
     cbar = grid.cbar_axes[0].colorbar(im)
-
-
-    cbar.set_label_text("prevalence") # of features")
+    cbar.set_label_text("prevalence")  # of features")
 
     for cax in grid.cbar_axes:
         cax.toggle_label(True)
@@ -529,15 +516,11 @@ def plot_feature_selection_aggregate_separate_runs(data, title=False, show_plot=
     grid.axes_llc.set_yticks([])
 
     if save_plot:
-        fig.savefig(f"{FOLDER}/{current_method_name()}{EXTENSION}", bbox_inches='tight', dpi=DPI)
+        fig.savefig(f"{FOLDER}/{current_method_name()}.png", bbox_inches='tight', dpi=DPI)
+        fig.savefig(f"{FOLDER}/{current_method_name()}.pdf", bbox_inches='tight', dpi=DPI)
 
     if show_plot:
         plt.show()
-
-
-
-
-
 
 
 def plot_feature_selection_aggregate(data, show_plot=False, show_cbar=False, save_plot=False):
@@ -571,7 +554,8 @@ def plot_feature_selection_aggregate(data, show_plot=False, show_cbar=False, sav
         plt.tight_layout(pad=0.4, w_pad=0.3, h_pad=0.3)
 
     if save_plot:
-        fig.savefig(f"{FOLDER}/{current_method_name()}{EXTENSION}", bbox_inches='tight')
+        fig.savefig(f"{FOLDER}/{current_method_name()}.png", bbox_inches='tight')
+        fig.savefig(f"{FOLDER}/{current_method_name()}.pdf", bbox_inches='tight')
 
     if show_plot:
         plt.show()
@@ -608,44 +592,101 @@ def save_topology(folder, flist, use_logical_cores=False, debug_info=True):
         for i, future in enumerate(futures):
             future.get()
             if debug_info:
-                print(f"Finished saving weight-layers: ({i+1}/{n_futures})")
+                print(f"Finished saving weight-layers: ({i + 1}/{n_futures})")
+
+
+def default_args_parser():
+    def add_bool_arg(parse, name, default=False, help_msg=''):
+        group = parse.add_mutually_exclusive_group(required=False)
+        group.add_argument('--' + name, dest=name, action='store_true', help='Enable: ' + help_msg)
+        group.add_argument('--no-' + name, dest=name, action='store_false', help='Disable: ' + help_msg)
+        parse.set_defaults(**{name: default})
+
+    p = argparse.ArgumentParser(description='Plotting tool')
+
+    add_bool_arg(p, 'plotting', default=True, help_msg='plotting')
+    add_bool_arg(p, 'title', default=True, help_msg='Add title to figure')
+    add_bool_arg(p, 'show_plots', default=True, help_msg='Show plots while running')
+    add_bool_arg(p, 'save_plots', default=False, help_msg='Save all plots')
+    add_bool_arg(p, 'fixup', help_msg='Try to fixup data before plotting')
+    add_bool_arg(p, 'save_topo', help_msg='Save the topology of all runs')
+    add_bool_arg(p, 'save_no_weights', help_msg='Save all runs without the SET weights. Reduces memory footprint.')
+
+    p.add_argument('--nprocessor', default=psutil.cpu_count(logical=False), type=int,
+                   help='# processors for calculation')
+
+    p.add_argument('--data_path', metavar='DIR', default=BENCHMARK_FOLDER,
+                   help=f'path to data (default: {BENCHMARK_FOLDER}/)')
+
+    p.add_argument('--folder_prefix', metavar='DIR', default=BENCHMARK_PREFIX,
+                   help=f"Only search folders with specific prefix for data (default: {BENCHMARK_PREFIX}).")
+
+    p.add_argument('--file_prefix', metavar='DIR', default=BENCHMARK_RUN_PREFIX,
+                   help=f"Only search files with specific prefix (default: {BENCHMARK_RUN_PREFIX}).")
+
+    p.add_argument('--folder_path', metavar='DIR', default=DEFAULT_FOLDER,
+                   help=f"select a specific folder to run on. "
+                        "If not set, the latest created folder is taken (default: {DEFAULT_FOLDER}).")
+
+    p.add_argument('--topo_path', metavar='DIR', default=TOPOLOGY_FOLDER,
+                   help=f'path to topo folder (default: {TOPOLOGY_FOLDER})')
+    p.add_argument('--save_path', metavar='DIR', default=FOLDER, help=f'path to save plots in (default: {FOLDER})')
+    return p
 
 
 if __name__ == "__main__":
 
-    if not os.path.exists(FOLDER):
-        os.makedirs(FOLDER)
+    parser = default_args_parser()
+    args = parser.parse_args()
 
-    benchmark_prefix = "set_worst_case_all_epochs_"
-    benchmark_run_prefix = "set_mlp_run_"
-    # benchmark_prefix = "benchmark_"
-    # benchmark_run_prefix = "fmnist_"
+    save_all_runs_no_weights = args.save_no_weights
+    save_topology_all_runs = args.save_topo
+    plotting = args.plotting
+    save_plots = args.save_plots
+    show_plots = args.show_plots
+    topo_path = args.topo_path
+    title = args.title
+    fixup = args.fixup
+    data_path = args.data_path
+    default_folder = args.folder_path
+    benchmark_prefix = args.folder_prefix
+    benchmark_run_prefix = args.file_prefix
 
-    benchmark_folders = os.listdir(BENCHMARK_FOLDER)
-    # pick the most recent benchmark
-    latest_benchmark_folder = sorted(filter(lambda x: x.startswith(benchmark_prefix), benchmark_folders))[-1]
+    if not os.path.exists(data_path):
+        raise ValueError(f"The specified data path does not exist: {data_path}")
 
-    full_folder_name = BENCHMARK_FOLDER + latest_benchmark_folder
-    flist = os.listdir(full_folder_name)
+    if default_folder:
+        latest_benchmark_folder = default_folder
+    else:
+        benchmark_folders = os.listdir(data_path)
+        # pick the most recent benchmark
+        latest_benchmark_folder = sorted(filter(lambda x: x.startswith(benchmark_prefix), benchmark_folders))[-1]
 
-    completed_list = sorted(filter(lambda x: x.startswith(benchmark_prefix + "completed"), flist))
+    full_folder_name = data_path + latest_benchmark_folder
 
-    if completed_list:
-        flist = completed_list
-    else:  # only partially completed benchmarks exist
-        # flist = sorted(filter(lambda x: x.startswith(benchmark_prefix), flist))
-        flist = sorted(filter(lambda x: x.startswith(benchmark_run_prefix), flist))
+    # TODO(Neil): Only use this if it actually exists
+    fname_all_runs = full_folder_name + "/fmnist_all_runs_no_weights.pickle"
+    flist = []
+
+    if fname_all_runs:
+        fname = fname_all_runs
+    else:
+        flist = os.listdir(full_folder_name)
+
+        completed_list = sorted(filter(lambda x: x.startswith(benchmark_prefix + "completed"), flist))
+
+        if completed_list:
+            flist = completed_list
+        else:  # only partially completed benchmarks exist
+            # flist = sorted(filter(lambda x: x.startswith(benchmark_prefix), flist))
+            flist = sorted(filter(lambda x: x.startswith(benchmark_run_prefix), flist))
 
     sample_epochs = [0, 5, 10, 20, 30, 40, 50, 75, 100, 150, 200, 300, 399]
 
-    FID = 5
     # fixup
-    fixup = False
     if fixup:
         for f in flist:
-        # f = flist[FID]
             fname = full_folder_name + '/' + f
-            benchmark = None
             with open(fname, "rb") as h:
                 benchmark = pickle.load(h)
                 benchmark['sample_epochs'] = sample_epochs
@@ -661,12 +702,6 @@ if __name__ == "__main__":
 
             print(f"finished with {f}")
 
-    # Note(Neil): You can also overwrite the fname here
-    # fname = "benchmark_1621249372.1620104.pickle"
-
-    save_all_runs_no_weights = False
-    fname_all_runs = full_folder_name + "/fmnist_all_runs_no_weights.pickle"
-
     if save_all_runs_no_weights:
         all_runs = []
         for frun in flist:
@@ -677,40 +712,22 @@ if __name__ == "__main__":
                 benchmark['set']['evolved_weights'] = []
                 all_runs.append(benchmark)
 
-            '''
-            # This info should have been in the benchmark
-            # TODO(Neil): really not needed anymore
-            if not completed_list:
-                n_runs = int(re.search(r'\d+', flist[-1]).group())
-                benchmark['info']['runs'] = n_runs
-            else:
-                benchmark['info']['runs'] += 1
-
-            print(benchmark["models"])
-            '''
         with open(fname_all_runs, "wb") as h:
             pickle.dump(all_runs, h)
 
-    save_topology_all_runs = True
-    if not os.path.exists(full_folder_name + "/topo"):
-        os.makedirs(full_folder_name + "/topo")
-        save_topology_all_runs = True
-
     if save_topology_all_runs:
+        if not os.path.exists(full_folder_name + topo_path):
+            os.makedirs(full_folder_name + topo_path)
+
         save_topology(full_folder_name, flist[1:])
 
-
-    plotting = False
-
     if plotting:
-        all_runs = []
-
         with open(fname_all_runs, "rb") as h:
             all_runs = pickle.load(h)
 
-        plot_sparsity_vs_time_all_runs(all_runs, show_plot=True, save_plot=True)
-        plot_feature_selection_aggregate_separate_runs(all_runs, title=True, show_plot=True, save_plot=True)
-        plot_sparsity_vs_accuracy_all_runs(all_runs, show_plot=True, save_plot=True)
-        plot_epoch_vs_accuracy_all_runs(all_runs, show_plot=True, save_plot=True)
-        plot_feature_selection_aggregate_per_epoch(all_runs, show_plot=True,
-                save_plot=True, title=True)
+        # plot_sparsity_vs_time_all_runs(all_runs, show_plot=show_plots, save_plot=save_plots)
+        plot_feature_selection_aggregate_separate_runs(all_runs, title=title, show_plot=show_plots,
+                                                       save_plot=save_plots)
+        # plot_sparsity_vs_accuracy_all_runs(all_runs, show_plot=save_plots, save_plot=save_plots)
+        # plot_epoch_vs_accuracy_all_runs(all_runs, show_plot=save_plots, save_plot=save_plots)
+        # plot_feature_selection_aggregate_per_epoch(all_runs, show_plot=show_plots, save_plot=save_plots, title=title)

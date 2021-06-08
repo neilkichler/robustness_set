@@ -387,6 +387,29 @@ def fmnist_train_set_differnt_densities(runs=10, n_training_epochs=100, set_spar
     print(f"Finished the entire process after: {delta_time.seconds}s")
 
 
+
+def fmnist_train_set_differnt_densities_sequential(runs=10, n_training_epochs=100, set_sparsity_levels=None, use_logical_cores=True):
+    # SET model parameters
+    set_params = {'n_hidden_neurons_layer': 3000,
+                  'epsilon': 13,  # set the sparsity level
+                  'zeta': 0.3,  # in [0..1]. Percentage of unimportant connections to be removed and replaced
+                  'batch_size': 40, 'dropout_rate': 0, 'learning_rate': 0.05, 'momentum': 0.9, 'weight_decay': 0.0002}
+
+    start_test = datetime.datetime.now()
+    n_cores = psutil.cpu_count(logical=use_logical_cores)
+    for i in range(runs):
+        fname = f"{FOLDER}/set_mlp_density_run_{i}.pickle"
+        print(f'[run={i}] Starting job')
+        single_run_density(i, set_params, set_sparsity_levels, n_training_epochs, fname)
+        print(f'-----------------------------[run={i}] Finished job')
+
+    delta_time = datetime.datetime.now() - start_test
+
+    print("-" * 30)
+    print(f"Finished the entire process after: {delta_time.seconds}s")
+
+
+
 if __name__ == "__main__":
     if not os.path.exists(FOLDER):
         os.makedirs(FOLDER)
@@ -405,14 +428,15 @@ if __name__ == "__main__":
     test_density = True
 
     if test_density:
-        runs = 4
+        runs = 8
         n_training_epochs = 200
         set_sparsity_levels = [1, 2, 3, 4, 5, 6, 13, 32, 64, 128, 256] # , 512, 1024]
         # the levels are chosen to have [0.16, 0.5, 1, 2, 5, 10, 20, 40, 80, 100] % density in the first layer
         use_logical_cores = False
         # FOLDER = "benchmarks/benchmark_02_06_2021_13_02_23"
 
-        fmnist_train_set_differnt_densities(runs, n_training_epochs, set_sparsity_levels, use_logical_cores=use_logical_cores)
+        # fmnist_train_set_differnt_densities(runs, n_training_epochs, set_sparsity_levels, use_logical_cores=use_logical_cores)
+        fmnist_train_set_differnt_densities_sequential(runs, n_training_epochs, set_sparsity_levels, use_logical_cores=use_logical_cores)
 
     else:
         benchmark = None
