@@ -430,7 +430,8 @@ if __name__ == "__main__":
     if test_density:
         runs = 8
         n_training_epochs = 200
-        set_sparsity_levels = [1, 2, 3, 4, 5, 6, 13, 32, 64, 128, 256] # , 512, 1024]
+        # set_sparsity_levels = [1, 2, 3, 4, 5, 6, 13, 32, 64, 128, 256] # , 512, 1024]
+        set_sparsity_levels = [1, 3, 5, 7, 9, 11, 13, 15, 17, 19, 21, 23, 25, 27, 29, 31] # , 512, 1024]
         # the levels are chosen to have [0.16, 0.5, 1, 2, 5, 10, 20, 40, 80, 100] % density in the first layer
         use_logical_cores = False
         # FOLDER = "benchmarks/benchmark_02_06_2021_13_02_23"
