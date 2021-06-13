@@ -22,9 +22,10 @@ RESULT_PREFIX = "fmnist_results_"
 RESULTS_EXTENSION = ".pickle"
 
 BENCHMARK_PREFIX = "benchmark_"
-BENCHMARK_TIME = "02_06_2021_18_27_06"
+# BENCHMARK_TIME = "02_06_2021_18_27_06"
+BENCHMARK_TIME = "08_06_2021_11_47_48"
 RUN_PREFIX = "set_mlp_density_run_"
-RUN_EXTENSION = ".pickle"
+RUN_EXTENSION = ".pickle.pbz2"
 
 BENCHMARK_PATH = FOLDER + BENCHMARK_PREFIX + BENCHMARK_TIME
 
@@ -63,7 +64,6 @@ def classify_differen_epochs_and_sparisties(run_id, fname, data, models, sample_
 
     n_features = X_train.shape[1]
 
-    set_pretrained_samples = {}
     n_sample_epochs = len(sample_epochs)
 
     set_pretrained_samples = load_set_trained(fname, sample_epochs)
@@ -74,7 +74,6 @@ def classify_differen_epochs_and_sparisties(run_id, fname, data, models, sample_
         density_levels.append(run['set_sparsity'])
 
     n_density_levels = len(density_levels)
-
     n_sparseness_levels = len(sparseness_levels)
 
     dimensions = (n_density_levels, n_sample_epochs, n_sparseness_levels, n_models)
@@ -177,7 +176,7 @@ if __name__ == "__main__":
     # NOTE (Neil): Assumes that all files in directory are benchmark files
     runs = len(flist)
 
-    sample_epochs = [0, 5, 10, 20, 30, 40, 50, 75, 100, 200, 300, 399]
+    sample_epochs = [0, 5, 10, 20, 30, 40, 50, 75, 100, 200, 300]  # , 399]
 
     sparseness_levels = [0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 0.925, 0.95, 0.975, 0.99, 0.995, 0.999]
 

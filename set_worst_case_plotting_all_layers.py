@@ -50,7 +50,7 @@ def plot_feature_selection_worst_case_per_epoch_all_layers(aggs, n_runs, sample_
         f_data = np.reshape(agg, image_dim)
         im = grid[i].imshow(f_data, vmin=0, vmax=np.max(f_data), cmap="gray_r", interpolation=None)
 
-        grid[i].set_title(f"Epoch: {sample_epochs[i]}")
+        grid[i].set_title(f"Epoch: {sample_epochs[i]}", fontsize=10)
 
 
     cbar = grid.cbar_axes[0].colorbar(im)
@@ -94,6 +94,10 @@ def perform_feature_selection(fname, benchmark, sample_epochs, sparseness_levels
 
 if __name__ == "__main__":
 
+    plt.rc('font', size=22)
+    plt.rc('text', usetex=True)
+    plt.rc('font', family='serif')
+
     full_folder_name = f"{FOLDER}/{SUB_FOLDER}_{PRETRAINED_FOLDER_TIME}"
     flist = os.listdir(full_folder_name)
 
@@ -130,4 +134,5 @@ if __name__ == "__main__":
                 aggs += benchmark['selected_features'][:, sparseness_level, :]
                 print(f"added {frun} to sum")
 
-    plot_feature_selection_worst_case_per_epoch_all_layers(aggs, n_runs, sample_epochs, show_plot=True, save_plot=True, title=True)
+    plot_feature_selection_worst_case_per_epoch_all_layers(aggs, n_runs, sample_epochs, show_plot=True, save_plot=True, title=False)
+

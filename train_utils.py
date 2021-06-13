@@ -2,6 +2,8 @@ import pickle
 import os
 
 import numpy as np
+import bz2
+from utils_load import load_file
 
 
 def sample_weights_and_metrics(evolved_weights, run_metrics, sample_epochs):
@@ -22,29 +24,32 @@ def sample_weights_and_metrics(evolved_weights, run_metrics, sample_epochs):
     return sample_weights, sample_metrics
 
 
-
-def load_set_trained(fname, sample_epochs) -> dict:
+def load_set_trained(fname, sample_epochs, use_all=True) -> dict:
     if os.path.isfile(fname):
         try:
-            with open(fname, "rb") as h:
-                set_pretrained = pickle.load(h)
-                set_pretrained_samples['density_levels'] = set_pretrained['density_levels']
-                set_pretrained_samples['runs'] = []
+            set_pretrained_samples = {}
+            set_pretrained = load_file(fname)
 
-                for run in set_pretrained['runs']:
-                    old_run = run['run']
-                    new_run = {'run_id': old_run['run_id'], 'set_params': old_run['set_params'],
-                               'training_time': old_run['training_time']}
+            if use_all:
+                return set_pretrained
 
-                    evolved_weights = old_run['evolved_weights']
-                    run_metrics = old_run['set_metrics']
+            set_pretrained_samples['density_levels'] = set_pretrained['density_levels']
+            set_pretrained_samples['runs'] = []
 
-                    new_run['evolved_weights'], new_run['set_metrics'] = sample_weights_and_metrics(evolved_weights, run_metrics)
+            for run in set_pretrained['runs']:
+                old_run = run['run']
+                new_run = {'run_id': old_run['run_id'], 'set_params': old_run['set_params'],
+                           'training_time': old_run['training_time']}
 
-                    set_pretrained_samples['runs'].append({'set_sparsity': run['set_sparsity'], 'run': new_run})
+                evolved_weights = old_run['evolved_weights']
+                run_metrics = old_run['set_metrics']
 
-                del set_pretrained
-                return set_pretrained_samples
+                new_run['evolved_weights'], new_run['set_metrics'] = sample_weights_and_metrics(evolved_weights, run_metrics, sample_epochs)
+
+                set_pretrained_samples['runs'].append({'set_sparsity': run['set_sparsity'], 'run': new_run})
+
+            del set_pretrained
+            return set_pretrained_samples
 
         except EOFError:
             print(f"FILE malformed: {fname} ")
