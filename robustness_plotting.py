@@ -15,29 +15,31 @@ from utils_plotting import current_method_name, get_model_names
 # NOTE(Neil): To quickly use a specific data folder change this variable
 # DEFAULT_FOLDER = "benchmark_23_05_2021_13_38_50"
 # DEFAULT_FOLDER = "benchmark_07_06_2021_22_27_28/"
-# DEFAULT_FOLDER = "benchmark_08_06_2021_11_47_48"
-DEFAULT_FOLDER = "fmnist_results_05_06_2021_02_00_15"
+# DEFAULT_FOLDER = "fmnist_results_05_06_2021_02_00_15"
+# DEFAULT_FOLDER = "lung_results_04_06_2021_19_56_42"
+DEFAULT_FOLDER = "madelon_results_05_06_2021_13_06_52"
 
-# FILE = "set_mlp_density_run_0.pickle"
 # FILE = "set_mlp_density_run_0.pickle.pbz2"
 # FILE = "fmnist_all_runs_no_weights.pickle"
-# FILE = ""
-FILE = "fmnist_results_0.pickle"
+# FILE = "fmnist_results_0.pickle"
+# FILE = "lung_results_all_runs.pickle"
+FILE = ""  # If file is empty we should probably create the all_runs_no_weights alternative
 FOLDER = "RobustnessResults/new_result"
 BENCHMARK_FOLDER = "benchmarks/"
 BENCHMARK_PREFIX = "benchmark_"
 # BENCHMARK_RUN_PREFIX = "fmnist_"
-BENCHMARK_RUN_PREFIX = "set_mlp_density_run"
+# BENCHMARK_RUN_PREFIX = "lung_"
+BENCHMARK_RUN_PREFIX = "madelon_"
 TOPOLOGY_FOLDER = "topo/"
 DPI = 300
 DPI_LIST = [300, 600, 1200]
 
 
 def save_figs(fig, name):
-    fig.savefig(f"{FOLDER}/{name}.png", bbox_inches='tight', dpi=DPI)
+    fig.savefig(f"{FOLDER}/{BENCHMARK_RUN_PREFIX}{name}.png", bbox_inches='tight', dpi=DPI)
 
     for dpi in DPI_LIST:
-        fig.savefig(f"{FOLDER}/{name}_dpi{dpi}.pdf", bbox_inches='tight', dpi=dpi)
+        fig.savefig(f"{FOLDER}/{BENCHMARK_RUN_PREFIX}{name}_dpi{dpi}.pdf", bbox_inches='tight', dpi=dpi)
 
 
 def clear_console():
@@ -117,9 +119,9 @@ def plot_sparsity_vs_accuracy_all_runs_base(scores, sparseness_levels, model_nam
         m_means = means[:, i]
         m_std = std[:, i]
         color = colors[i]
-        # plt.fill_between(sparseness_levels_percent, (m_means - m_std) * percent,
-        #                  (m_means + m_std) * percent, alpha=0.1,
-        #                  color=color)
+        plt.fill_between(sparseness_levels_percent, (m_means - m_std) * percent,
+                         (m_means + m_std) * percent, alpha=0.1,
+                         color=color)
 
         plt.plot(sparseness_levels_percent, m_means * percent, color=color, label=model)
         plt.scatter(sparseness_levels_percent, m_means * percent, color=color)
@@ -128,7 +130,7 @@ def plot_sparsity_vs_accuracy_all_runs_base(scores, sparseness_levels, model_nam
 
     if title:
         plt.title("FMNIST Feature Selection Sparsity vs Accuracy")
-    plt.xlabel(r"Dropped Features [\%]")
+    plt.xlabel(r"Features Dropped [\%]")
     plt.ylabel(r"Accuracy [\%]")
     plt.grid(linestyle="--")
     plt.legend()
@@ -345,7 +347,7 @@ def plot_epoch_vs_accuracy_all_runs(data, save_plot=False, show_plot=False, titl
 
     for i, model in enumerate(model_names):
         fig = plt.figure()
-        for j in range(n_sample_epochs - 4):
+        for j in range(n_sample_epochs):
             scores = np.array([d['scores'][j] for d in data])
             means = np.mean(scores, axis=0)
             std = np.std(scores, axis=0)
@@ -734,7 +736,7 @@ if __name__ == "__main__":
     flist = []
 
     if args.file:
-        fname = full_folder_name + args.file
+        fname = args.file
     else:
         flist = os.listdir(full_folder_name)
 
@@ -747,6 +749,7 @@ if __name__ == "__main__":
             flist = sorted(filter(lambda x: x.startswith(benchmark_run_prefix), flist))
         fname = flist[-1]
 
+    fname = full_folder_name + fname
     sample_epochs = [0, 5, 10, 20, 30, 40, 50, 75, 100, 150, 200, 300, 399]
 
     # fixup
@@ -771,13 +774,22 @@ if __name__ == "__main__":
     if save_all_runs_no_weights:
         all_runs = []
         for frun in flist:
+
             fname = full_folder_name + frun
 
             run = load_file(fname)
-            run['set']['evolved_weights'] = []
+            density_levels = run['set']['density_levels']
+
+            density_level_idx = density_levels.index(13)
+            dimensions = run['dimensions']
+            run['set'] = []
+            run['scores'] = run['scores'][density_level_idx]
+            run['times'] = run['times'][density_level_idx]
+            run['dimensions'] = (dimensions[1], dimensions[2], dimensions[3])
+            run['selected_features'] = run['selected_features'][density_level_idx]
             all_runs.append(run)
 
-        with open(full_folder_name + topo_path + save_all_runs_no_weights, "wb") as h:
+        with open(full_folder_name + "lung_results_all_runs.pickle", "wb") as h:
             pickle.dump(all_runs, h)
 
     if save_topology_all_runs:
@@ -792,15 +804,9 @@ if __name__ == "__main__":
         plt.rc('font', size=22)
         plt.rc('text', usetex=True)
         plt.rc('font', family='serif')
-        plot_accuracy_different_densities(all_runs, title=title, show_plot=show_plots, save_plot=save_plots)
+        # plot_accuracy_different_densities(all_runs, title=title, show_plot=show_plots, save_plot=save_plots)
         # plot_feature_selection_aggregate_separate_runs(all_runs, title=title, show_plot=show_plots,
         #                                                save_plot=save_plots)
-        # plot_sparsity_vs_accuracy_all_runs(all_runs, show_plot=save_plots, save_plot=save_plots)
-        # plot_epoch_vs_accuracy_all_runs(all_runs, show_plot=save_plots, save_plot=save_plots, title=title)
+        plot_sparsity_vs_accuracy_all_runs(all_runs, show_plot=show_plots, save_plot=save_plots)
+        # plot_epoch_vs_accuracy_all_runs(all_runs, show_plot=save_plots, save_plot=save_plots)
         # plot_feature_selection_aggregate_per_epoch(all_runs, show_plot=show_plots, save_plot=save_plots, title=title)
-
-        # plt.rcParams['font.family'] = 'serif'
-        # plt.rcParams['font.serif'] = 'Computer Modern Roman'
-        # plt.figure()
-        # plt.title("Testing")
-        # plt.show()

@@ -1,176 +1,145 @@
 import copy
-import datetime
-import logging
 import os
+import datetime
 import pickle
 from multiprocessing import Pool
-
 import numpy as np
-import psutil
-import scipy.io as sio
-from numpy.core.multiarray import ndarray
-from sklearn.model_selection import train_test_split
-from sklearn.preprocessing import OneHotEncoder, StandardScaler
-from sklearn.neural_network import MLPClassifier
+
 from sklearn.ensemble import ExtraTreesClassifier
+from sklearn.neighbors import KNeighborsClassifier
+from sklearn.svm import SVC
 
-from nn_functions import Relu, Sigmoid, CrossEntropy, Tanh, MSE
+from madelon_data import load_madelon_npz, train_test_split_normalize
+from feature_selection import feature_selection_mean
+from lung_data import load_lung_data, train_test_split_normalize
 
-from set_mlp import SET_MLP
+import psutil
 
-DATA_PATH = './data/'
-PATH = "MADELON/"
-FULL_PATH = DATA_PATH + PATH
+FOLDER = "benchmarks/"
+RESULTS_FOLDER = "benchmarks/"
+RESULT_PREFIX = "madelon_results_"
+RESULTS_EXTENSION = ".pickle"
 
-FILE_NAME = 'lung.mat'
-FOLDER = "benchmarks"
+BENCHMARK_PREFIX = "benchmark_madelon_"
+BENCHMARK_TIME = "05_06_2021_01_59_55"
+RUN_PREFIX = "set_mlp_density_run_"
+RUN_EXTENSION = ".pickle"
 
-TEST_SIZE = 1 / 3
+BENCHMARK_PATH = FOLDER + BENCHMARK_PREFIX + BENCHMARK_TIME
 
-# TODO(Neil): Most of this can be combined with lung_classification as it is almost the same
-
-
-def save_madelon_npz() -> (ndarray, ndarray):
-    train_data_path = FULL_PATH + 'madelon_train.data'
-    train_resp_path = FULL_PATH + 'madelon_train.labels'
-    val_data_path = FULL_PATH + 'madelon_valid.data'
-    val_resp_path = FULL_PATH + 'madelon_valid.labels'
-    X_train = np.loadtxt(train_data_path)
-    y_train = np.loadtxt(train_resp_path)
-    X_test = np.loadtxt(val_data_path)
-    y_test = np.loadtxt(val_resp_path)
-
-    X = np.concatenate((X_train, X_test), axis=0)
-    y = np.concatenate((y_train, y_test), axis=0)
-
-    np.savez_compressed(FULL_PATH + "madelon", X=X, y=y.reshape(len(y), 1))
-
-    return X, y
+DEBUG = 0
 
 
-def load_madelon_npz():
-    data = np.load(FULL_PATH + "madelon.npz")
+def classify(model, data) -> (datetime.timedelta, float):
+    def index_one(x):
+        return np.where(x == 1)
 
-    X = data['X']
-    y = data['y']
-    enc = OneHotEncoder().fit(y)
-    y = enc.transform(y).astype('uint8').toarray()
+    X_train, X_test, y_train, y_test = data
+    current_y_train = y_train
+    current_y_test = y_test
 
-    return X, y
-
-
-def train_test_split_normalize(X_: ndarray, y_: ndarray, test_size=TEST_SIZE, random_state=42) \
-        -> (ndarray, ndarray, ndarray, ndarray):
-    X_train_, X_test_, y_train_, y_test_ = train_test_split(X_, y_, test_size=test_size, random_state=random_state)
-
-    normalize = StandardScaler()
-    normalize.fit(X_train_)
-    X_train_ = normalize.transform(X_train_)
-    X_test_ = normalize.transform(X_test_)
-    return X_train_, X_test_, y_train_, y_test_
-
-
-def madelon_single_run(X_train_, X_test_, y_train_, y_test_, set_params_, run_id=0):
-    n_hidden_neurons_layer = set_params_['n_hidden_neurons_layer']
-    epochs = set_params_['epochs']
-    epsilon = set_params_['epsilon']
-    zeta = set_params_['zeta']
-    batch_size = set_params_['batch_size']
-    dropout_rate = set_params_['dropout_rate']
-    learning_rate = set_params_['learning_rate']
-    momentum = set_params_['momentum']
-    weight_decay = set_params_['weight_decay']
+    # undo one-hot encoding for SVC
+    if isinstance(model, SVC):
+        current_y_train = np.apply_along_axis(index_one, 1, current_y_train).flatten()
+        current_y_test = np.apply_along_axis(index_one, 1, current_y_test).flatten()
 
     start_time = datetime.datetime.now()
 
-    # clf = MLPClassifier(random_state=1, max_iter=300).fit(X_train_, y_train_)
-    # clf = ExtraTreesClassifier()
-    # clf.fit(X_train_, y_train_)
-    # score = clf.score(X_test_, y_test_)
-    # print(f"SCORE: {score}")
+    model.fit(X_train, current_y_train)
 
-    set_mlp = SET_MLP(
-        (X_train_.shape[1], n_hidden_neurons_layer, y_train_.shape[1]),
-        (Sigmoid, Tanh), epsilon=epsilon, init_network='normal')
+    elapsed_time = datetime.datetime.now() - start_time
 
-    set_metrics = set_mlp.fit(X_train_, y_train_, X_test_, y_test_, loss=CrossEntropy, epochs=epochs, zeta=zeta,
-                              batch_size=batch_size,
-                              dropout_rate=dropout_rate, learning_rate=learning_rate, momentum=momentum,
-                              weight_decay=weight_decay,
-                              testing=True, run_id=run_id)
+    score = model.score(X_test, current_y_test)
 
-    dt = datetime.datetime.now() - start_time
-    evolved_weights = set_mlp.weights_evolution
-
-    sample_epochs = [0, 5, 10, 20, 30, 40, 50, 75, 100, 200, 300, 399]
-
-    sample_weights = []
-    sample_set_metrics = []
-    for sample_epoch in sample_epochs:
-        sample_weights.append(evolved_weights[sample_epoch])
-        sample_set_metrics.append(set_metrics[sample_epoch])
-
-    run_result = {'run_id': run_id, 'set_params': copy.copy(set_params_),
-            'set_metrics': sample_set_metrics,
-                  'evolved_weights': sample_weights, 'training_time': dt}
-
-    return run_result
+    return elapsed_time, score
 
 
-def madelon_density_runs(run_id, set_params, density_levels, n_training_epochs, data, fname="", folder=""):
-    np.random.seed(run_id)
+def classify_differen_epochs_and_sparisties(run_id, fname, data, models,
+        sample_epochs, sparseness_levels, save_folder):
+    print(f"[run={run_id}] Job started")
 
+    n_models = len(models)
     X_train, X_test, y_train, y_test = data
 
-    if os.path.isfile(fname):
-        with open(fname, "rb") as h:
-            results = pickle.load(h)
-    else:
-        results = {'density_levels': density_levels, 'runs': []}
+    n_features = X_train.shape[1]
 
-    for epsilon in density_levels:
-        logging.info(f"[run_id={run_id}] Starting SET-Sparsity: epsilon={epsilon}")
-        set_params['epsilon'] = epsilon
-        set_params['epochs'] = n_training_epochs
+    with open(fname, "rb") as h:
+        set_pretrained = pickle.load(h)
 
-        run_result = madelon_single_run(X_train, X_test, y_train, y_test, set_params, run_id=run_id)
+    density_levels = set_pretrained['density_levels']
+    n_density_levels = len(density_levels)
+    runs = set_pretrained['runs']
 
-        results['runs'].append({'set_sparsity': epsilon, 'run': run_result})
+    n_sample_epochs = len(sample_epochs)
+    n_sparseness_levels = len(sparseness_levels)
 
-        fname = f"{folder}/set_mlp_density_run_{run_id}.pickle"
-        # save preliminary results
-        with open(fname, "wb") as h:
+    dimensions = (n_density_levels, n_sample_epochs, n_sparseness_levels, n_models)
+    scores = np.zeros(dimensions)
+    times = np.zeros(dimensions)
+
+    selected_features = np.zeros((n_density_levels, n_sample_epochs, n_sparseness_levels, n_features))
+
+    for s, run in enumerate(runs):
+        set_sparsity = run['set_sparsity']
+        run = run['run']
+
+        evolved_weights = run['evolved_weights']
+        run_metrics = run['set_metrics']
+
+        for i, epoch in enumerate(sample_epochs):
+            current_weights = evolved_weights[i]
+            first_layer = current_weights[1]
+
+            for j, sparsity in enumerate(sparseness_levels):
+                selected_indices = feature_selection_mean(sparsity=sparsity, weights=first_layer)
+
+                selected_features[s][i][j] = selected_indices
+
+                for k, model in enumerate(models):
+                    elapsed_time, score = classify(model, (
+                        X_train[:, selected_indices], X_test[:, selected_indices], y_train, y_test))
+
+                    print(
+                        "[run_id={:<3}|set_epsilon={:<6}|weights_epoch={:<3}|feature_sparseness={:<6}|model={:<20}] Finished fitting w/ accuracy={:>3}".format(
+                            run_id, set_sparsity, epoch, sparsity, type(model).__name__, score))
+
+                    times[s][i][j][k] = elapsed_time.microseconds
+                    scores[s][i][j][k] = score
+
+        results = {'set': set_pretrained, 'sparseness_levels': sparseness_levels, 'models': models, 'scores': scores,
+                   'times': times,
+                   'stats': [], 'sample_epochs': sample_epochs, 'dimensions': dimensions,
+                   'selected_features': selected_features}
+
+        with open(f"{save_folder}/{RESULT_PREFIX}{run_id}{RESULTS_EXTENSION}", "wb") as h:
             pickle.dump(results, h)
 
+    print(f"-------Finished testing run: {run_id}")
 
-def madelon_train_set_differnt_densities(runs=10, n_training_epochs=100, set_sparsity_levels=None,
-                                         use_logical_cores=True,
-                                         folder=''):
-    set_params = {'n_hidden_neurons_layer': 1000,
-                  'epochs': n_training_epochs,
-                  'epsilon': 20,  # set the sparsity level
-                  'zeta': 0.3,  # in [0..1]. Percentage of unimportant connections to be removed and replaced
-                  'batch_size': 100, 'dropout_rate': 0, 'learning_rate': 0.01, 'momentum': 0.9, 'weight_decay': 0.00002}
+
+def madelon_feature_select_and_classify(runs, models, sample_epochs,
+        sparseness_levels, save_folder,  use_logical_cores=False):
+    start_test = datetime.datetime.now()
+    n_cores = psutil.cpu_count(logical=use_logical_cores)
 
     X, y = load_madelon_npz()
 
-    start_test = datetime.datetime.now()
-    n_cores = psutil.cpu_count(logical=use_logical_cores)
+    if DEBUG:
+        i = 0
+        fname = BENCHMARK_PATH + "/" + RUN_PREFIX + str(i) + RUN_EXTENSION
+        data = train_test_split_normalize(X, y, random_state=i)
+        classify_differen_epochs_and_sparisties(i, fname, data, models, sample_epochs, sparseness_levels)
+        return
+
     with Pool(processes=n_cores) as pool:
         futures = []
         for i in range(runs):
-            remaining_density_levels = copy.copy(set_sparsity_levels)
-            # check if results already exist
-            fname = f"{folder}/set_mlp_madelon_density_run_{i}.pickle"
-            if os.path.isfile(fname):
-                with open(fname, "rb") as h:
-                    result = pickle.load(h)
-                    for el in result['runs']:
-                        remaining_density_levels.remove(el['set_sparsity'])
-
-            data = train_test_split_normalize(X, y, test_size=TEST_SIZE, random_state=i)
-            futures.append(pool.apply_async(madelon_density_runs, (
-                i, set_params, remaining_density_levels, n_training_epochs, data, fname, folder)))
+            fname = BENCHMARK_PATH + "/" + RUN_PREFIX + str(i) + RUN_EXTENSION
+            data = train_test_split_normalize(X, y, random_state=i)
+            futures.append(pool.apply_async(classify_differen_epochs_and_sparisties,
+                                            (i, fname, data, models,
+                                                sample_epochs,
+                                                sparseness_levels, save_folder)))
 
         for i, future in enumerate(futures):
             print(f'[run={i}] Starting job')
@@ -183,25 +152,26 @@ def madelon_train_set_differnt_densities(runs=10, n_training_epochs=100, set_spa
     print(f"Finished the entire process after: {delta_time.seconds}s")
 
 
-def test():
-    save_madelon_npz()
+if __name__ == "__main__":
 
-
-if __name__ == '__main__':
-
-    if not os.path.exists(FOLDER):
-        os.makedirs(FOLDER)
-
-    sub_folder = "benchmark_madelon"
+    sub_folder = "madelon_results"
     date_format = "%d_%m_%Y_%H_%M_%S"
-    FOLDER = f"{FOLDER}/{sub_folder}_{datetime.datetime.now().strftime(date_format)}"
-    os.makedirs(FOLDER)
+    RESULTS_FOLDER = f"{FOLDER}/{sub_folder}_{datetime.datetime.now().strftime(date_format)}"
+    os.makedirs(RESULTS_FOLDER)
 
-    runs = 32
-    n_training_epochs = 400
-    set_sparsity_levels = [1, 2, 3, 4, 5, 6, 13, 32, 64, 128, 256]
+    models = [SVC(C=1, kernel='linear', gamma='auto'),
+              KNeighborsClassifier(n_neighbors=3),
+              ExtraTreesClassifier(n_estimators=50, n_jobs=1)]
 
-    logical_cores = False
+    flist = os.listdir(BENCHMARK_PATH)
 
-    madelon_train_set_differnt_densities(runs, n_training_epochs, set_sparsity_levels, use_logical_cores=logical_cores,
-                                         folder=FOLDER)
+    # NOTE (Neil): Assumes that all files in directory are benchmark files
+    runs = len(flist)
+
+    sample_epochs = [0, 5, 10, 20, 30, 40, 50, 75, 99]
+
+    sparseness_levels = [0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 0.925, 0.95,
+                         0.975, 0.99, 0.995, 0.999]
+
+    madelon_feature_select_and_classify(runs, models, sample_epochs,
+            sparseness_levels, RESULTS_FOLDER)
