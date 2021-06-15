@@ -22,6 +22,7 @@ DEFAULT_FOLDER = "fmnist_results_14_06_2021_10_24_40"  # For the different densi
 
 # FILE = "set_mlp_density_run_0.pickle"
 # FILE = "set_mlp_density_run_0.pickle.pbz2"
+# FILE = "fmnist_results_all_runs.pickle"
 # FILE = "fmnist_all_runs_no_weights.pickle"
 # FILE = "fmnist_results_0.pickle"
 # FILE = "lung_results_all_runs.pickle"
@@ -105,13 +106,8 @@ def plot_sparsity_vs_accuracy_all_runs_base(scores, sparseness_levels, model_nam
     fig = plt.figure()
     percent = 100
 
-    # This assumes that the runs are normally distributed!
-    # For n > 30 or more we should be fine
-    # scores = scores[:, last_epoch, :]
     means = np.mean(scores, axis=0)
     std = np.std(scores, axis=0)
-
-    # for score in scores:
 
     colors = ["green", "red", "blue"]
 
@@ -121,6 +117,7 @@ def plot_sparsity_vs_accuracy_all_runs_base(scores, sparseness_levels, model_nam
         m_means = means[:, i]
         m_std = std[:, i]
         color = colors[i]
+
         plt.fill_between(sparseness_levels_percent, (m_means - m_std) * percent,
                          (m_means + m_std) * percent, alpha=0.1,
                          color=color)
@@ -137,8 +134,6 @@ def plot_sparsity_vs_accuracy_all_runs_base(scores, sparseness_levels, model_nam
     plt.grid(linestyle="--")
     plt.legend()
 
-    # TODO(Neil): Saving the plot is duplicated across the functions. Maybe make a master_function to do this for us
-    #             maybe even with a decorator?
     if save_plot:
         save_figs(fig, fname_prefix + current_method_name())
 
@@ -392,7 +387,7 @@ def plot_feature_selection_aggregate_per_epoch(data, title=False, show_plot=Fals
     sparseness_levels = data[0]['sparseness_levels']
     sparseness_level = sparseness_levels.index(0.7)
 
-    fig = plt.figure(dpi=300)
+    fig = plt.figure(dpi=DPI)
 
     sparseness_levels = data[0]['sparseness_levels']
     selected_sparseness_idx = [1, 2, 3, 4, 5, 6, 7, 8, 10]
@@ -498,7 +493,7 @@ def plot_feature_selection_aggregate_separate_runs(data, title=False, show_plot=
                                                    save_plot=False):
     percent = 100
     image_dim = (28, 28)
-    fig = plt.figure(dpi=300)
+    fig = plt.figure(dpi=DPI)
 
     sparseness_levels = data[0]['sparseness_levels']
     selected_sparseness_idx = [1, 2, 3, 4, 5, 6, 7, 8, 10]
@@ -584,24 +579,46 @@ def plot_feature_selection_aggregate(data, show_plot=False, show_cbar=False, sav
         plt.show()
 
 
-# TODO: we may want to work with kwargs instead of passing all the options separately
 def plot_accuracy_different_densities(data, show_plot=False, save_plot=False, title=False):
-    info = data['set']
-    density_levels = info['density_levels']
-    scores = data['scores']
-    sparseness_levels = data['sparseness_levels']
-    models = get_model_names(data)
+    sparseness_levels = data[0]['sparseness_levels'][0:12]
+    models = get_model_names(data[0])
+    n_densities = data[0]['dimensions'][0]
+    last_epoch = -1
 
-    fig = plt.figure(dpi=300)
+    fig, axs = plt.subplots(figsize=(10.0, 3.0), nrows=1, ncols=n_densities, dpi=DPI)
+    percent = 100
+    for j in range(n_densities):
+        density_level = 1 + 2 * j
 
-    if title:
-        fig.suptitle(f'Feature Selection Densities FMNIST')
+        scores = [d['scores'][j][last_epoch, 0:12, :] for d in data]
 
-    for density_level in range(scores.shape[0]):
-        # for now we only have a single value:
-        score = [scores[density_level][-1]]
-        plot_sparsity_vs_accuracy_all_runs_base(score, sparseness_levels, models, title=title, show_plot=show_plot,
-                                                fname_prefix=f"{density_levels[density_level]}", save_plot=save_plot)
+        means = np.mean(scores, axis=0)
+        std = np.std(scores, axis=0)
+
+        colors = ["green", "red", "blue"]
+
+        sparseness_levels_percent = np.asarray(sparseness_levels) * percent
+
+        for i, model in enumerate(models):
+            m_means = means[:, i]
+            m_std = std[:, i]
+            color = colors[i]
+
+            axs[j].fill_between(sparseness_levels_percent, (m_means - m_std) * percent,
+                                (m_means + m_std) * percent, alpha=0.1,
+                                color=color)
+
+            axs[j].plot(sparseness_levels_percent, m_means * percent, color=color, label=model)
+
+        axs[j].set_title(f"{density_level}", fontsize=10)
+        axs[j].set_xticks([])
+        if j > 0:
+            axs[j].set_yticks([])
+
+    axs[0].set_ylabel(r"Accuracy [\%]")
+    axs[n_densities // 2].set_xlabel(r"Features Dropped [\%]")
+
+    plt.legend(fontsize=10, bbox_to_anchor=(-15.0, -0.37, 0.5, 0.5))
 
     if save_plot:
         save_figs(fig, current_method_name())
@@ -661,7 +678,10 @@ def default_args_parser():
     add_bool_arg(p, 'save_topo', help_msg='Save the topology of all runs')
     add_bool_arg(p, 'save_no_weights', default=False,
                  help_msg='Save all runs without the SET weights. Reduces memory footprint (default: "").')
-
+    add_bool_arg(p, 'latex_labels', default=True, help_msg='Use Latex as the rendering engine for the plots. '
+                                                           'Requires latex to be installed on the system. '
+                                                           '(default: True)')
+    add_bool_arg(p, 'plot_density', default=False, help_msg='Create and show density plot (default: False)')
     p.add_argument('--save_single_density', default=-1,
                    help='If save_no_weights, only save a specific density level. '
                         'If negative all densities are taken. (default: -1).')
@@ -780,7 +800,7 @@ if __name__ == "__main__":
     if save_all_runs_no_weights:
         print("Saving all runs into a single file with the weight matrix of SET removed (to save space).")
         all_runs = []
-        for frun in flist:
+        for i, frun in enumerate(flist):
 
             fname = full_folder_name + frun
 
@@ -795,7 +815,10 @@ if __name__ == "__main__":
                 run['times'] = run['times'][density_level_idx]
                 run['dimensions'] = (dimensions[1], dimensions[2], dimensions[3])
                 run['selected_features'] = run['selected_features'][density_level_idx]
+            else:
+                run['set'] = []
             all_runs.append(run)
+            print(f"Added run ({i + 1}/{len(flist)}): {fname}")
 
         with open(full_folder_name + f"{BENCHMARK_RUN_PREFIX}results_all_runs.pickle", "wb") as h:
             pickle.dump(all_runs, h)
@@ -813,17 +836,14 @@ if __name__ == "__main__":
         all_runs = load_file(fname)
 
         plt.rc('font', size=22)
-        plt.rc('text', usetex=True)
-        plt.rc('font', family='serif')
-        # plot_accuracy_different_densities(all_runs, title=title, show_plot=show_plots, save_plot=save_plots)
+        if args.latex_labels:  # requires latex to be installed on the system
+            plt.rc('text', usetex=True)
+            plt.rc('font', family='serif')
+
+        if args.plot_density:
+            plot_accuracy_different_densities(all_runs, title=title, show_plot=show_plots, save_plot=save_plots)
         # plot_feature_selection_aggregate_separate_runs(all_runs, title=title, show_plot=show_plots,
         #                                                save_plot=save_plots)
         # plot_sparsity_vs_accuracy_all_runs(all_runs, show_plot=save_plots, save_plot=save_plots)
         # plot_epoch_vs_accuracy_all_runs(all_runs, show_plot=save_plots, save_plot=save_plots, title=title)
         # plot_feature_selection_aggregate_per_epoch(all_runs, show_plot=show_plots, save_plot=save_plots, title=title)
-
-        # plt.rcParams['font.family'] = 'serif'
-        # plt.rcParams['font.serif'] = 'Computer Modern Roman'
-        # plt.figure()
-        # plt.title("Testing")
-        # plt.show()
