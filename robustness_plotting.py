@@ -778,13 +778,14 @@ if __name__ == "__main__":
             print(f"finished with {f}")
 
     if save_all_runs_no_weights:
+        print("Saving all runs into a single file with the weight matrix of SET removed (to save space).")
         all_runs = []
         for frun in flist:
 
             fname = full_folder_name + frun
 
             run = load_file(fname)
-            if save_single_density > 0:
+            if save_single_density >= 0:
                 density_levels = run['set']['density_levels']
 
                 density_level_idx = density_levels.index(save_single_density)
@@ -796,16 +797,19 @@ if __name__ == "__main__":
                 run['selected_features'] = run['selected_features'][density_level_idx]
             all_runs.append(run)
 
-        with open(full_folder_name + "lung_results_all_runs.pickle", "wb") as h:
+        with open(full_folder_name + f"{BENCHMARK_RUN_PREFIX}results_all_runs.pickle", "wb") as h:
             pickle.dump(all_runs, h)
 
     if save_topology_all_runs:
-        if not os.path.exists(full_folder_name + topo_path):
-            os.makedirs(full_folder_name + topo_path)
+        name = full_folder_name + topo_path
+        if not os.path.exists(name):
+            os.makedirs(name)
 
+        print(f"Saving topology information into folder: {name}.")
         save_topology(full_folder_name, flist[1:])
 
     if plotting:
+        print("Loading all runs for use in plotting.")
         all_runs = load_file(fname)
 
         plt.rc('font', size=22)
