@@ -1,7 +1,7 @@
 # Robustness of Sparse Neural Networks
 Author: Neil Kichler
 
-The code for SET was modified from an alternate version of the official [SET implementation](https://github.com/SelimaC/Tutorial-SCADS-Summer-School-2020-Scalable-Deep-Learning)
+The code for SET was modified from an alternate Numba based version of the official [SET implementation](https://github.com/SelimaC/Tutorial-SCADS-Summer-School-2020-Scalable-Deep-Learning)
 
 ##### Dependencies
 To run the program, please make sure that the following requirements are met
