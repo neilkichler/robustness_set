@@ -17,22 +17,24 @@ from utils_plotting import current_method_name, get_model_names
 # DEFAULT_FOLDER = "benchmark_07_06_2021_22_27_28/"
 # DEFAULT_FOLDER = "fmnist_results_05_06_2021_02_00_15"
 # DEFAULT_FOLDER = "lung_results_04_06_2021_19_56_42"
-DEFAULT_FOLDER = "madelon_results_05_06_2021_13_06_52"
+# DEFAULT_FOLDER = "madelon_results_05_06_2021_13_06_52"
+DEFAULT_FOLDER = "fmnist_results_14_06_2021_10_24_40"  # For the different density runs
 
+# FILE = "set_mlp_density_run_0.pickle"
 # FILE = "set_mlp_density_run_0.pickle.pbz2"
 # FILE = "fmnist_all_runs_no_weights.pickle"
 # FILE = "fmnist_results_0.pickle"
 # FILE = "lung_results_all_runs.pickle"
-FILE = ""  # If file is empty we should probably create the all_runs_no_weights alternative
+FILE = ""  # If file is empty we look at the last file in the folder unless save_no_weights is specified.
 FOLDER = "RobustnessResults/new_result"
 BENCHMARK_FOLDER = "benchmarks/"
 BENCHMARK_PREFIX = "benchmark_"
-# BENCHMARK_RUN_PREFIX = "fmnist_"
+BENCHMARK_RUN_PREFIX = "fmnist_"
 # BENCHMARK_RUN_PREFIX = "lung_"
-BENCHMARK_RUN_PREFIX = "madelon_"
+# BENCHMARK_RUN_PREFIX = "madelon_"
 TOPOLOGY_FOLDER = "topo/"
 DPI = 300
-DPI_LIST = [300, 600, 1200]
+DPI_LIST = [300, 600]
 
 
 def save_figs(fig, name):
@@ -657,8 +659,12 @@ def default_args_parser():
     add_bool_arg(p, 'save_plots', default=False, help_msg='Save all plots')
     add_bool_arg(p, 'fixup', help_msg='Try to fixup data before plotting')
     add_bool_arg(p, 'save_topo', help_msg='Save the topology of all runs')
-    add_bool_arg(p, 'save_no_weights',
+    add_bool_arg(p, 'save_no_weights', default=False,
                  help_msg='Save all runs without the SET weights. Reduces memory footprint (default: "").')
+
+    p.add_argument('--save_single_density', default=-1,
+                   help='If save_no_weights, only save a specific density level. '
+                        'If negative all densities are taken. (default: -1).')
 
     p.add_argument('--nprocessor', default=psutil.cpu_count(logical=False), type=int,
                    help='# processors for calculation')
@@ -714,6 +720,7 @@ if __name__ == "__main__":
     fixup = args.fixup
     data_path = args.data_path
     default_folder = args.folder_path
+    save_single_density = args.save_single_density
 
     if not default_folder.endswith("/"):
         default_folder += "/"
@@ -732,7 +739,6 @@ if __name__ == "__main__":
 
     full_folder_name = data_path + latest_benchmark_folder
 
-    # TODO(Neil): Only use this if it actually exists
     flist = []
 
     if args.file:
@@ -778,15 +784,16 @@ if __name__ == "__main__":
             fname = full_folder_name + frun
 
             run = load_file(fname)
-            density_levels = run['set']['density_levels']
+            if save_single_density > 0:
+                density_levels = run['set']['density_levels']
 
-            density_level_idx = density_levels.index(13)
-            dimensions = run['dimensions']
-            run['set'] = []
-            run['scores'] = run['scores'][density_level_idx]
-            run['times'] = run['times'][density_level_idx]
-            run['dimensions'] = (dimensions[1], dimensions[2], dimensions[3])
-            run['selected_features'] = run['selected_features'][density_level_idx]
+                density_level_idx = density_levels.index(save_single_density)
+                dimensions = run['dimensions']
+                run['set'] = []
+                run['scores'] = run['scores'][density_level_idx]
+                run['times'] = run['times'][density_level_idx]
+                run['dimensions'] = (dimensions[1], dimensions[2], dimensions[3])
+                run['selected_features'] = run['selected_features'][density_level_idx]
             all_runs.append(run)
 
         with open(full_folder_name + "lung_results_all_runs.pickle", "wb") as h:
@@ -807,6 +814,12 @@ if __name__ == "__main__":
         # plot_accuracy_different_densities(all_runs, title=title, show_plot=show_plots, save_plot=save_plots)
         # plot_feature_selection_aggregate_separate_runs(all_runs, title=title, show_plot=show_plots,
         #                                                save_plot=save_plots)
-        plot_sparsity_vs_accuracy_all_runs(all_runs, show_plot=show_plots, save_plot=save_plots)
-        # plot_epoch_vs_accuracy_all_runs(all_runs, show_plot=save_plots, save_plot=save_plots)
+        # plot_sparsity_vs_accuracy_all_runs(all_runs, show_plot=save_plots, save_plot=save_plots)
+        # plot_epoch_vs_accuracy_all_runs(all_runs, show_plot=save_plots, save_plot=save_plots, title=title)
         # plot_feature_selection_aggregate_per_epoch(all_runs, show_plot=show_plots, save_plot=save_plots, title=title)
+
+        # plt.rcParams['font.family'] = 'serif'
+        # plt.rcParams['font.serif'] = 'Computer Modern Roman'
+        # plt.figure()
+        # plt.title("Testing")
+        # plt.show()
