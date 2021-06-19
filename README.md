@@ -24,7 +24,7 @@ python 3.7.6, numpy 1.17.2, scipy 1.4.1, numba 0.48.0, scikit-learn 0.24.2,
 matplotlib 3.4.1, pandas 1.2.4, psutil 5.8.0
 
 ### Implementation
-The code for SET was modified from an alternate Numba based version of the official [SET implementation](https://github.com/SelimaC/Tutorial-SCADS-Summer-School-2020-Scalable-Deep-Learning) [1].
+The code for SET was modified from an alternate Numba based version of the official [SET implementation](https://github.com/SelimaC/Tutorial-SCADS-Summer-School-2020-Scalable-Deep-Learning) [1]. The improvement is outlined in Section 3.3 of the paper.
 
 #####  NNSTD:
 The improved implementation of NNSTD can be found at: https://git.snt.utwente.nl/s2106019/sparse_topology_distance and an explanation of NNSTD is given at [2].
