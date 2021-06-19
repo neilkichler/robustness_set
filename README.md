@@ -24,6 +24,9 @@ The problem addressed can have further implications in understanding sparse trai
 Furthermore, it discusses the potential viability of sparse-to-sparse training methods for supervised feature selection.
 
 
+######  NNSTD:
+The improved implementation of NNSTD can be found at: https://git.snt.utwente.nl/s2106019/sparse_topology_distance and an explanation of NNSTD is given at [2].
+
 ###### References
 
 For an easy understanding of SET, please read the following article:
@@ -35,3 +38,11 @@ For an easy understanding of SET, please read the following article:
   year =          {2018},
   doi =           {10.1038/s41467-018-04316-3},
   url =           {https://www.nature.com/articles/s41467-018-04316-3 }}
+
+
+2.  @inproceedings{liu2020topological,
+title={Topological Insights into Sparse Neural Networks},
+author={Liu, Shiwei and Van der Lee, Tim and Yaman, Anil and Atashgahi, Zahra and Ferraro, Davide and Sokar, Ghada and Pechenizkiy, Mykola and Mocanu, Decebal Constantin},
+booktitle={ECMLPKDD},
+year={2020}
+}
