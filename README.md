@@ -1,16 +1,9 @@
 # Robustness of Sparse Neural Networks
 Author: Neil Kichler
 
-The code for SET was modified from an alternate Numba based version of the official [SET implementation](https://github.com/SelimaC/Tutorial-SCADS-Summer-School-2020-Scalable-Deep-Learning) [1].
+Preliminary Link to associated research paper: Will be added in the near future
 
-##### Dependencies
-To run the program, please make sure that the following requirements are met
-(if not - install with ```pip install <package>``` or anaconda etc.):
-
-python 3.7.6, numpy 1.17.2, scipy 1.4.1, numba 0.48.0, scikit-learn 0.24.2,
-matplotlib 3.4.1, pandas 1.2.4, psutil 5.8.0
-
-######  Abstract of associated Paper:
+#####  Abstract of associated Paper:
 Deep Neural Networks have seen great success yet require increasingly higher dimensional data to be applied successfully.
 To reduce the ever-increasing computational, energy and memory requirements, the concept of sparsity has emerged as a leading approach.
 Sparse-to-sparse training methods allow training and inference on more resource-limited devices.
@@ -23,6 +16,15 @@ This work provides a basis for understanding whether supervised feature selectio
 The problem addressed can have further implications in understanding sparse training, given that it visualizes some aspects of the random exploratory nature of these methods.
 Furthermore, it discusses the potential viability of sparse-to-sparse training methods for supervised feature selection.
 
+#### Dependencies
+To run the program, please make sure that the following requirements are met
+(if not - install with ```pip install <package>``` or anaconda etc.):
+
+python 3.7.6, numpy 1.17.2, scipy 1.4.1, numba 0.48.0, scikit-learn 0.24.2,
+matplotlib 3.4.1, pandas 1.2.4, psutil 5.8.0
+
+#### implementation
+The code for SET was modified from an alternate Numba based version of the official [SET implementation](https://github.com/SelimaC/Tutorial-SCADS-Summer-School-2020-Scalable-Deep-Learning) [1].
 
 ######  NNSTD:
 The improved implementation of NNSTD can be found at: https://git.snt.utwente.nl/s2106019/sparse_topology_distance and an explanation of NNSTD is given at [2].
