@@ -37,7 +37,7 @@ For an easy understanding of SET, please read the following article:
   title =         {Scalable Training of Artificial Neural Networks with Adaptive Sparse Connectivity inspired by Network Science},
   year =          {2018},
   doi =           {10.1038/s41467-018-04316-3},
-  url =           {https://www.nature.com/articles/s41467-018-04316-3}}
+  url =           {https://www.nature.com/articles/s41467-018-04316-3 }}
 
 
 2.  @inproceedings{liu2020topological,
@@ -45,4 +45,4 @@ For an easy understanding of SET, please read the following article:
   author={Liu, Shiwei and Van der Lee, Tim and Yaman, Anil and Atashgahi, Zahra and Ferraro, Davide and Sokar, Ghada and Pechenizkiy, Mykola and Mocanu, Decebal Constantin},
   booktitle={ECMLPKDD},
   year={2020}
-  url = {https://doi.org/10.1007/978-3-030-67664-3_17}}
+  url = {https://doi.org/10.1007/978-3-030-67664-3_17 }}
