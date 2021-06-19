@@ -44,5 +44,6 @@ For an easy understanding of SET and NNSTD, please read the following article:
   title={Topological Insights into Sparse Neural Networks},
   author={Liu, Shiwei and Van der Lee, Tim and Yaman, Anil and Atashgahi, Zahra and Ferraro, Davide and Sokar, Ghada and Pechenizkiy, Mykola and Mocanu, Decebal Constantin},
   booktitle={ECMLPKDD},
-  year={2020}
+  year={2020},
+  doi = {10.1007/978-3-030-67664-3_17},
   url = {https://doi.org/10.1007/978-3-030-67664-3_17 }}
