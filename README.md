@@ -29,7 +29,7 @@ The improved implementation of NNSTD can be found at: https://git.snt.utwente.nl
 
 ###### References
 
-For an easy understanding of SET and NNSTD, please read the following article:
+For an easy understanding of SET and NNSTD, please read the following articles:
 
 1. @article{Mocanu2018SET,
   author =        {Mocanu, Decebal Constantin and Mocanu, Elena and Stone, Peter and Nguyen, Phuong H. and Gibescu, Madeleine and Liotta, Antonio},
@@ -37,7 +37,7 @@ For an easy understanding of SET and NNSTD, please read the following article:
   title =         {Scalable Training of Artificial Neural Networks with Adaptive Sparse Connectivity inspired by Network Science},
   year =          {2018},
   doi =           {10.1038/s41467-018-04316-3},
-  url =           {https://www.nature.com/articles/s41467-018-04316-3 }}
+  url =           { https://www.nature.com/articles/s41467-018-04316-3 }}
 
 
 2.  @inproceedings{liu2020topological,
@@ -46,4 +46,4 @@ For an easy understanding of SET and NNSTD, please read the following article:
   booktitle={ECMLPKDD},
   year={2020},
   doi = {10.1007/978-3-030-67664-3_17},
-  url = {https://doi.org/10.1007/978-3-030-67664-3_17 }}
+  url = { https://doi.org/10.1007/978-3-030-67664-3_17 }}
