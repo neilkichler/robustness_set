@@ -29,7 +29,7 @@ The improved implementation of NNSTD can be found at: https://git.snt.utwente.nl
 
 ###### References
 
-For an easy understanding of SET, please read the following article:
+For an easy understanding of SET and NNSTD, please read the following article:
 
 1. @article{Mocanu2018SET,
   author =        {Mocanu, Decebal Constantin and Mocanu, Elena and Stone, Peter and Nguyen, Phuong H. and Gibescu, Madeleine and Liotta, Antonio},
