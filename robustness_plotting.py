@@ -13,25 +13,35 @@ from scipy.sparse import save_npz
 from utils_plotting import current_method_name, get_model_names
 
 # NOTE(Neil): To quickly use a specific data folder change this variable
-DEFAULT_FOLDER = "benchmark_23_05_2021_13_38_50"  # For the accuracy results
+
+# Fig. 5: For the sparsity vs accuracy results
+# DEFAULT_FOLDER = "benchmark_23_05_2021_13_38_50"
 # DEFAULT_FOLDER = "benchmark_07_06_2021_22_27_28/"
+
+# Fig. 4: For the different density runs
+# DEFAULT_FOLDER = "fmnist_results_14_06_2021_10_24_40"
+
+# Fig. 7, 11a) 11b): FMNIST accuracy for differnt feature selections based on various epochs of SET-MLP
 # DEFAULT_FOLDER = "fmnist_results_05_06_2021_02_00_15"
-# DEFAULT_FOLDER = "lung_results_04_06_2021_19_56_42"
+
+# Fig. 11c) 11d): Lung accuracy for differnt feature selections based on various epochs of SET-MLP
+DEFAULT_FOLDER = "lung_results_04_06_2021_19_56_42"
+
+# Addendum Figures:
 # DEFAULT_FOLDER = "madelon_results_05_06_2021_13_06_52"
-# DEFAULT_FOLDER = "fmnist_results_14_06_2021_10_24_40"  # For the different density runs
 
 # FILE = "set_mlp_density_run_0.pickle"
 # FILE = "set_mlp_density_run_0.pickle.pbz2"
 # FILE = "fmnist_results_all_runs.pickle"
-FILE = "fmnist_all_runs_no_weights.pickle"
+# FILE = "fmnist_all_runs_no_weights.pickle"
 # FILE = "fmnist_results_0.pickle"
-# FILE = "lung_results_all_runs.pickle"
+FILE = "lung_results_all_runs.pickle"
 # FILE = ""  # If file is empty we look at the last file in the folder unless save_no_weights is specified.
 FOLDER = "RobustnessResults/new_result"
 BENCHMARK_FOLDER = "benchmarks/"
 BENCHMARK_PREFIX = "benchmark_"
-BENCHMARK_RUN_PREFIX = "fmnist_"
-# BENCHMARK_RUN_PREFIX = "lung_"
+# BENCHMARK_RUN_PREFIX = "fmnist_"
+BENCHMARK_RUN_PREFIX = "lung_"
 # BENCHMARK_RUN_PREFIX = "madelon_"
 TOPOLOGY_FOLDER = "topo/"
 DPI = 300
@@ -637,7 +647,7 @@ def plot_accuracy_different_densities(data, show_plot=False, save_plot=False, ti
         means = np.mean(scores, axis=0)
         std = np.std(scores, axis=0)
 
-        colors = ["green", "red", "blue"]
+        colors = COLORS
 
         sparseness_levels_percent = np.asarray(sparseness_levels) * percent
 
