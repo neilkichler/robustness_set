@@ -622,7 +622,7 @@ if __name__ == "__main__":
 
         # set model parameters
         no_hidden_neurons_layer = 3000
-        epsilon = 13  # set the sparsity level
+        epsilon = 1  # set the sparsity level
         zeta = 0.3  # in [0..1]. It gives the percentage of unimportant connections which are removed and replaced with random ones after every epoch
         no_training_epochs = 10  # 400
         batch_size = 40

@@ -13,20 +13,20 @@ from scipy.sparse import save_npz
 from utils_plotting import current_method_name, get_model_names
 
 # NOTE(Neil): To quickly use a specific data folder change this variable
-# DEFAULT_FOLDER = "benchmark_23_05_2021_13_38_50"
+DEFAULT_FOLDER = "benchmark_23_05_2021_13_38_50"  # For the accuracy results
 # DEFAULT_FOLDER = "benchmark_07_06_2021_22_27_28/"
 # DEFAULT_FOLDER = "fmnist_results_05_06_2021_02_00_15"
 # DEFAULT_FOLDER = "lung_results_04_06_2021_19_56_42"
 # DEFAULT_FOLDER = "madelon_results_05_06_2021_13_06_52"
-DEFAULT_FOLDER = "fmnist_results_14_06_2021_10_24_40"  # For the different density runs
+# DEFAULT_FOLDER = "fmnist_results_14_06_2021_10_24_40"  # For the different density runs
 
 # FILE = "set_mlp_density_run_0.pickle"
 # FILE = "set_mlp_density_run_0.pickle.pbz2"
 # FILE = "fmnist_results_all_runs.pickle"
-# FILE = "fmnist_all_runs_no_weights.pickle"
+FILE = "fmnist_all_runs_no_weights.pickle"
 # FILE = "fmnist_results_0.pickle"
 # FILE = "lung_results_all_runs.pickle"
-FILE = ""  # If file is empty we look at the last file in the folder unless save_no_weights is specified.
+# FILE = ""  # If file is empty we look at the last file in the folder unless save_no_weights is specified.
 FOLDER = "RobustnessResults/new_result"
 BENCHMARK_FOLDER = "benchmarks/"
 BENCHMARK_PREFIX = "benchmark_"
@@ -37,12 +37,17 @@ TOPOLOGY_FOLDER = "topo/"
 DPI = 300
 DPI_LIST = [300, 600]
 
+COLORS = plt.rcParams['axes.prop_cycle'].by_key()['color']
+
 
 def save_figs(fig, name):
-    fig.savefig(f"{FOLDER}/{BENCHMARK_RUN_PREFIX}{name}.png", bbox_inches='tight', dpi=DPI)
+    base_path = f"{FOLDER}/{BENCHMARK_RUN_PREFIX}{name}"
+    fig.savefig(f"{base_path}.png", bbox_inches='tight', dpi=DPI)
 
     for dpi in DPI_LIST:
-        fig.savefig(f"{FOLDER}/{BENCHMARK_RUN_PREFIX}{name}_dpi{dpi}.pdf", bbox_inches='tight', dpi=dpi)
+        fig.savefig(f"{base_path}_dpi{dpi}.pdf", bbox_inches='tight', dpi=dpi)
+
+    print(f"saved figure at: {base_path}")
 
 
 def clear_console():
@@ -109,14 +114,12 @@ def plot_sparsity_vs_accuracy_all_runs_base(scores, sparseness_levels, model_nam
     means = np.mean(scores, axis=0)
     std = np.std(scores, axis=0)
 
-    colors = ["green", "red", "blue"]
-
     sparseness_levels_percent = np.asarray(sparseness_levels) * percent
 
     for i, model in enumerate(model_names):
         m_means = means[:, i]
         m_std = std[:, i]
-        color = colors[i]
+        color = COLORS[i]
 
         plt.fill_between(sparseness_levels_percent, (m_means - m_std) * percent,
                          (m_means + m_std) * percent, alpha=0.1,
@@ -132,7 +135,7 @@ def plot_sparsity_vs_accuracy_all_runs_base(scores, sparseness_levels, model_nam
     plt.xlabel(r"Features Dropped [\%]")
     plt.ylabel(r"Accuracy [\%]")
     plt.grid(linestyle="--")
-    plt.legend()
+    plt.legend(fontsize=16)
 
     if save_plot:
         save_figs(fig, fname_prefix + current_method_name())
@@ -489,6 +492,44 @@ def plot_feature_selection_per_run(data):
     plt.show()
 
 
+def plot_feature_selection_aggregate_separate_runs_single_sparsity(data, title=False, show_plot=False, show_cbar=False,
+                                                                   save_plot=False):
+    percent = 100
+    image_dim = (28, 28)
+    fig = plt.figure(dpi=DPI)
+
+    sparseness_levels = data[0]['sparseness_levels']
+    selected_sparseness_idx = [1, 2, 3, 4, 5, 6, 7, 8, 10]
+
+    if title:
+        fig.suptitle(f'Feature Selection FMNIST ({len(data)} runs, sparsity=0.1,...,0.9)')
+
+    # NOTE(Neil): could now also be -1
+    LAST_EPOCH = 12
+
+    aggs = np.array([d['selected_features'][LAST_EPOCH] for d in data]).sum(axis=0)
+
+    agg = aggs[7]
+    f_data = np.reshape(agg, image_dim)
+
+    im = plt.imshow(f_data, vmin=0, vmax=np.max(f_data), cmap="Greys", interpolation=None)
+
+    # plt.colorbar(im, cax = grid.cbar_axes[0])
+    # cbar = ax.cbar_axes[0].colorbar(im)
+    # cbar.set_label_text("prevalence")  # of features")
+
+    # This affects all axes because we set share_all = True.
+    plt.xticks([])
+    plt.yticks([])
+
+    if save_plot:
+        print(f"Saved to file {current_method_name()}")
+        save_figs(fig, current_method_name())
+
+    if show_plot:
+        plt.show()
+
+
 def plot_feature_selection_aggregate_separate_runs(data, title=False, show_plot=False, show_cbar=False,
                                                    save_plot=False):
     percent = 100
@@ -585,6 +626,7 @@ def plot_accuracy_different_densities(data, show_plot=False, save_plot=False, ti
     n_densities = data[0]['dimensions'][0]
     last_epoch = -1
 
+    plt.rc('font', size=18)
     fig, axs = plt.subplots(figsize=(10.0, 3.0), nrows=1, ncols=n_densities, dpi=DPI)
     percent = 100
     for j in range(n_densities):
@@ -611,10 +653,12 @@ def plot_accuracy_different_densities(data, show_plot=False, save_plot=False, ti
             axs[j].plot(sparseness_levels_percent, m_means * percent, color=color, label=model)
 
         axs[j].set_title(f"{density_level}", fontsize=10)
+
         axs[j].set_xticks([])
         if j > 0:
             axs[j].set_yticks([])
 
+    axs[-1].set_xticks([0, 100])
     axs[0].set_ylabel(r"Accuracy [\%]")
     axs[n_densities // 2].set_xlabel(r"Features Dropped [\%]")
 
@@ -844,6 +888,12 @@ if __name__ == "__main__":
             plot_accuracy_different_densities(all_runs, title=title, show_plot=show_plots, save_plot=save_plots)
         # plot_feature_selection_aggregate_separate_runs(all_runs, title=title, show_plot=show_plots,
         #                                                save_plot=save_plots)
-        # plot_sparsity_vs_accuracy_all_runs(all_runs, show_plot=save_plots, save_plot=save_plots)
+
+        # TODO: Remove later
+        # plot_feature_selection_aggregate_separate_runs_single_sparsity(all_runs, title=title, show_plot=show_plots,
+        #                                                                save_plot=save_plots)
+
+        plot_sparsity_vs_accuracy_all_runs(all_runs, show_plot=show_plots, save_plot=save_plots)
+
         # plot_epoch_vs_accuracy_all_runs(all_runs, show_plot=save_plots, save_plot=save_plots, title=title)
         # plot_feature_selection_aggregate_per_epoch(all_runs, show_plot=show_plots, save_plot=save_plots, title=title)
