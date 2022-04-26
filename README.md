@@ -1,7 +1,7 @@
 # Robustness of Sparse Neural Networks
 Author: Neil Kichler
 
-Link to [associated paper](http://purl.utwente.nl/essays/86886).
+Link to [associated paper](http://essay.utwente.nl/86886/1/Kichler_BA_EEMCS.pdf).
 
 ###  Abstract of associated Paper:
 Deep Neural Networks have seen great success yet require increasingly higher dimensional data to be applied successfully.
